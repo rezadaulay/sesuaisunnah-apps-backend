@@ -53,7 +53,7 @@ class EbookController extends Controller
         // Sort by
         $sortBy = $request->get('sort_by', 'created_at');
         $sortOrder = $request->get('sort_order', 'desc');
-        
+
         switch ($sortBy) {
             case 'title':
                 $query->orderBy('title', $sortOrder);
@@ -104,13 +104,14 @@ class EbookController extends Controller
     }
 
     /**
-     * Get popular ebooks.
+     * Get popular ebooks based on interactions.
      */
     public function popular(Request $request): JsonResponse
     {
-        $limit = $request->get('limit', 10);
-        $ebooks = Ebook::popular($limit)
-            ->with(['creator:id,name'])
+        $ebooks = Ebook::with(['creator:id,name'])
+            ->withCount(['interactions', 'audiobookFiles'])
+            ->popular()
+            ->limit($request->get('limit', 5))
             ->get();
 
         return response()->json([
@@ -158,162 +159,6 @@ class EbookController extends Controller
                 'per_page' => $ebooks->perPage(),
                 'total' => $ebooks->total(),
             ],
-        ]);
-    }
-
-    /**
-     * Store a newly created ebook.
-     */
-    public function store(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:200',
-            'description' => 'nullable|string',
-            'cover_image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'price' => 'required|numeric|min:0|max:999999.99',
-            'ebook_file' => 'required|file|mimes:pdf,epub,doc,docx|max:51200', // 50MB max
-            'audiobook_files.*' => 'nullable|file|mimes:mp3,m4a,aac,wav|max:102400', // 100MB max
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        // Store ebook file
-        $ebookFile = $request->file('ebook_file');
-        $ebookFileName = time() . '_' . $ebookFile->getClientOriginalName();
-        $ebookFilePath = $ebookFile->storeAs('ebooks/files', $ebookFileName, 'public');
-
-        // Store cover image if provided
-        $coverImagePath = null;
-        if ($request->hasFile('cover_image')) {
-            $coverImage = $request->file('cover_image');
-            $coverImageName = time() . '_' . $coverImage->getClientOriginalName();
-            $coverImagePath = $coverImage->storeAs('ebooks/covers', $coverImageName, 'public');
-        }
-
-        // Create ebook
-        $ebook = Ebook::create([
-            'title' => $request->title,
-            'description' => $request->description,
-            'cover_image' => $coverImagePath,
-            'price' => $request->price,
-            'file_url' => $ebookFilePath,
-            'created_by' => auth()->id() ?? 1, // Default to user ID 1 for now
-        ]);
-
-        // Store audiobook files if provided
-        if ($request->hasFile('audiobook_files')) {
-            $audiobookFiles = $request->file('audiobook_files');
-            $orderNumber = 1;
-
-            foreach ($audiobookFiles as $audioFile) {
-                $audioFileName = time() . '_' . $orderNumber . '_' . $audioFile->getClientOriginalName();
-                $audioFilePath = $audioFile->storeAs('ebooks/audiobooks/' . $ebook->id, $audioFileName, 'public');
-
-                AudiobookFile::create([
-                    'ebook_id' => $ebook->id,
-                    'name' => pathinfo($audioFile->getClientOriginalName(), PATHINFO_FILENAME),
-                    'file_url' => $audioFilePath,
-                    'order_number' => $orderNumber,
-                ]);
-
-                $orderNumber++;
-            }
-        }
-
-        $ebook->load(['creator:id,name', 'audiobookFiles']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Ebook created successfully',
-            'data' => new EbookResource($ebook),
-        ], 201);
-    }
-
-    /**
-     * Update the specified ebook.
-     */
-    public function update(Request $request, Ebook $ebook): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'title' => 'sometimes|required|string|max:200',
-            'description' => 'nullable|string',
-            'cover_image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'price' => 'sometimes|required|numeric|min:0|max:999999.99',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        // Update cover image if provided
-        if ($request->hasFile('cover_image')) {
-            // Delete old cover image
-            if ($ebook->cover_image && Storage::disk('public')->exists($ebook->cover_image)) {
-                Storage::disk('public')->delete($ebook->cover_image);
-            }
-
-            $coverImage = $request->file('cover_image');
-            $coverImageName = time() . '_' . $coverImage->getClientOriginalName();
-            $coverImagePath = $coverImage->storeAs('ebooks/covers', $coverImageName, 'public');
-            
-            $ebook->cover_image = $coverImagePath;
-        }
-
-        // Update other fields
-        $ebook->update($request->only(['title', 'description', 'price']));
-
-        $ebook->load(['creator:id,name', 'audiobookFiles']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Ebook updated successfully',
-            'data' => new EbookResource($ebook),
-        ]);
-    }
-
-    /**
-     * Remove the specified ebook.
-     */
-    public function destroy(Ebook $ebook): JsonResponse
-    {
-        // Delete ebook file
-        if (Storage::disk('public')->exists($ebook->file_url)) {
-            Storage::disk('public')->delete($ebook->file_url);
-        }
-
-        // Delete cover image
-        if ($ebook->cover_image && Storage::disk('public')->exists($ebook->cover_image)) {
-            Storage::disk('public')->delete($ebook->cover_image);
-        }
-
-        // Delete audiobook files
-        foreach ($ebook->audiobookFiles as $audioFile) {
-            if (Storage::disk('public')->exists($audioFile->file_url)) {
-                Storage::disk('public')->delete($audioFile->file_url);
-            }
-        }
-
-        // Delete audiobook directory
-        $audiobookDir = 'ebooks/audiobooks/' . $ebook->id;
-        if (Storage::disk('public')->exists($audiobookDir)) {
-            Storage::disk('public')->deleteDirectory($audiobookDir);
-        }
-
-        $ebook->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Ebook deleted successfully',
         ]);
     }
 
@@ -387,81 +232,6 @@ class EbookController extends Controller
         return response()->json([
             'success' => true,
             'data' => $stats,
-        ]);
-    }
-
-    /**
-     * Upload audiobook files to existing ebook.
-     */
-    public function uploadAudiobook(Request $request, Ebook $ebook): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'audiobook_files.*' => 'required|file|mimes:mp3,m4a,aac,wav|max:102400', // 100MB max
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $uploadedFiles = [];
-        $audiobookFiles = $request->file('audiobook_files');
-        $orderNumber = $ebook->audiobookFiles()->max('order_number') + 1;
-
-        foreach ($audiobookFiles as $audioFile) {
-            $audioFileName = time() . '_' . $orderNumber . '_' . $audioFile->getClientOriginalName();
-            $audioFilePath = $audioFile->storeAs('ebooks/audiobooks/' . $ebook->id, $audioFileName, 'public');
-
-            $audiobookFile = AudiobookFile::create([
-                'ebook_id' => $ebook->id,
-                'name' => pathinfo($audioFile->getClientOriginalName(), PATHINFO_FILENAME),
-                'file_url' => $audioFilePath,
-                'order_number' => $orderNumber,
-            ]);
-
-            $uploadedFiles[] = $audiobookFile;
-            $orderNumber++;
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => count($uploadedFiles) . ' audiobook file(s) uploaded successfully',
-            'data' => $uploadedFiles,
-        ]);
-    }
-
-    /**
-     * Delete audiobook file.
-     */
-    public function deleteAudiobook(Request $request, Ebook $ebook): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'audiobook_file_id' => 'required|exists:audiobook_files,id,ebook_id,' . $ebook->id,
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $audiobookFile = AudiobookFile::find($request->audiobook_file_id);
-
-        // Delete file from storage
-        if (Storage::disk('public')->exists($audiobookFile->file_url)) {
-            Storage::disk('public')->delete($audiobookFile->file_url);
-        }
-
-        $audiobookFile->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Audiobook file deleted successfully',
         ]);
     }
 }

@@ -120,50 +120,7 @@ class EventController extends Controller
         ]);
     }
 
-    /**
-     * Upload documentation for an event.
-     */
-    public function uploadDocumentation(Request $request, Event $event): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'files.*' => 'required|file|mimes:jpg,jpeg,png,gif,mp4,mov,avi,pdf,doc,docx|max:10240', // 10MB max
-            'type' => 'required|in:photo,video,document',
-            'description' => 'nullable|string|max:500',
-        ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $uploadedFiles = [];
-        $files = $request->file('files');
-
-        foreach ($files as $file) {
-            $fileName = time() . '_' . $file->getClientOriginalName();
-            $filePath = $file->storeAs('events/' . $event->id . '/documentation', $fileName, 'public');
-
-            $gallery = EventGallery::create([
-                'event_id' => $event->id,
-                'photo_url' => $filePath,
-                'type' => $request->type,
-                'description' => $request->description,
-                'file_size' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
-            ]);
-
-            $uploadedFiles[] = $gallery;
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => count($uploadedFiles) . ' file(s) uploaded successfully',
-            'data' => $uploadedFiles,
-        ]);
-    }
 
     /**
      * Get event documentation by type.
@@ -208,78 +165,9 @@ class EventController extends Controller
         ]);
     }
 
-    /**
-     * Delete event documentation.
-     */
-    public function deleteDocumentation(Request $request, Event $event): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'documentation_id' => 'required|integer',
-        ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
 
-        $documentation = EventGallery::where('id', $request->documentation_id)
-            ->where('event_id', $event->id)
-            ->first();
 
-        if (!$documentation) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Documentation not found for this event',
-            ], 404);
-        }
-
-        // Delete file from storage
-        if (Storage::disk('public')->exists($documentation->photo_url)) {
-            Storage::disk('public')->delete($documentation->photo_url);
-        }
-
-        $documentation->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Documentation deleted successfully',
-        ]);
-    }
-
-    /**
-     * Update event documentation description.
-     */
-    public function updateDocumentationDescription(Request $request, Event $event): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'documentation_id' => 'required|exists:event_galleries,id,event_id,' . $event->id,
-            'description' => 'required|string|max:500',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $documentation = EventGallery::find($request->documentation_id);
-        $documentation->update(['description' => $request->description]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Description updated successfully',
-            'data' => [
-                'id' => $documentation->id,
-                'description' => $documentation->description,
-                'updated_at' => $documentation->updated_at->format('Y-m-d H:i:s'),
-            ],
-        ]);
-    }
 
     /**
      * Get events with documentation summary.

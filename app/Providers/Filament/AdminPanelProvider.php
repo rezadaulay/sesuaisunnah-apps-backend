@@ -28,7 +28,13 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::hex('#005555'),
+                'secondary' => Color::hex('#069A8E'),
+                'success' => Color::hex('#069A8E'),
+                'warning' => Color::hex('#FFC700'),
+                'danger' => Color::hex('#dc2626'),
+                'info' => Color::hex('#0284c7'),
+                'gray' => Color::hex('#4b5563'),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
@@ -38,7 +44,9 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
-                Widgets\FilamentInfoWidget::class,
+                \App\Filament\Widgets\StatsOverview::class,
+                \App\Filament\Widgets\DonationChart::class,
+                \App\Filament\Widgets\LatestDonations::class,
             ])
             ->middleware([
                 EncryptCookies::class,

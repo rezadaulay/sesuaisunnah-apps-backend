@@ -10,19 +10,32 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\IconEntry;
+use Filament\Infolists\Components\Grid;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\RichEditor;
-use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Section as FormSection;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\Grid as FormGrid;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\Filter;
-use Illuminate\Database\Eloquent\Model;
+use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Actions\ActionGroup;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\ViewAction;
 
 class EventResource extends Resource
 {
@@ -30,57 +43,67 @@ class EventResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar';
 
-    protected static ?string $navigationGroup = 'Event Management';
+    protected static ?string $navigationGroup = 'Manajemen Konten';
 
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $navigationLabel = 'Acara';
+
+    protected static ?string $modelLabel = 'Acara';
+
+    protected static ?string $pluralModelLabel = 'Acara';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('Event Information')
+                FormSection::make('Informasi Acara')
                     ->schema([
                         TextInput::make('title')
-                            ->label('Event Title')
+                            ->label('Judul Acara')
                             ->required()
-                            ->maxLength(200)
-                            ->placeholder('Enter event title'),
-                        
-                        RichEditor::make('description')
-                            ->label('Description')
-                            ->columnSpanFull()
-                            ->placeholder('Enter event description'),
-                        
-                        DatePicker::make('event_date')
-                            ->label('Event Date')
-                            ->required()
-                            ->minDate(now())
-                            ->displayFormat('d/m/Y'),
-                        
-                        FileUpload::make('featured_image')
-                            ->label('Featured Image')
+                            ->maxLength(255)
+                            ->placeholder('Masukkan judul acara'),
+
+                        Textarea::make('description')
+                            ->label('Deskripsi')
+                            ->rows(4)
+                            ->placeholder('Masukkan deskripsi acara'),
+
+                        FormGrid::make(2)
+                            ->schema([
+                                DatePicker::make('event_date')
+                                    ->label('Tanggal Acara')
+                                    ->required(),
+
+                                TextInput::make('location')
+                                    ->label('Lokasi')
+                                    ->maxLength(255)
+                                    ->placeholder('Masukkan lokasi acara'),
+                            ]),
+
+                        FileUpload::make('image')
+                            ->label('Gambar Acara')
                             ->image()
                             ->imageEditor()
-                            ->directory('events/featured')
-                            ->columnSpanFull(),
-                    ])->columns(2),
+                            ->directory('events/images')
+                            ->placeholder('Upload gambar acara'),
+                    ])->columns(1),
 
-                Forms\Components\Section::make('Documentation')
+                FormSection::make('Pengaturan')
                     ->schema([
-                        RichEditor::make('documentation_desc')
-                            ->label('Documentation Description')
-                            ->columnSpanFull()
-                            ->placeholder('Enter event documentation description (can be filled after event)'),
-                    ])->collapsible(),
+                        FormGrid::make(2)
+                            ->schema([
+                                Toggle::make('is_active')
+                                    ->label('Status Aktif')
+                                    ->default(true),
 
-                Forms\Components\Section::make('Creator Information')
-                    ->schema([
-                        Select::make('created_by')
-                            ->label('Created By')
-                            ->relationship('creator', 'name')
-                            ->required()
-                            ->disabled(),
-                    ])->collapsible(),
+                                Toggle::make('is_featured')
+                                    ->label('Acara Unggulan')
+                                    ->default(false),
+                            ]),
+
+                    ])->columns(2)->collapsible(),
             ]);
     }
 
@@ -88,69 +111,80 @@ class EventResource extends Resource
     {
         return $table
             ->columns([
-                ImageColumn::make('featured_image')
-                    ->label('Image')
+                ImageColumn::make('image')
+                    ->label('Gambar')
                     ->circular()
                     ->size(50),
-                
+
                 TextColumn::make('title')
-                    ->label('Title')
+                    ->label('Judul')
                     ->searchable()
                     ->sortable()
+                    ->weight('bold')
                     ->limit(50),
-                
+
+                TextColumn::make('description')
+                    ->label('Deskripsi')
+                    ->limit(80)
+                    ->toggleable(),
+
                 TextColumn::make('event_date')
-                    ->label('Date')
-                    ->date('d/m/Y')
-                    ->sortable()
-                    ->badge()
-                    ->color(fn (Model $record): string => match (true) {
-                        $record->is_today => 'success',
-                        $record->is_upcoming => 'warning',
-                        $record->is_past => 'gray',
-                        default => 'primary',
-                    }),
-                
-                TextColumn::make('participants_count')
-                    ->label('Participants')
+                    ->label('Tanggal Acara')
+                    ->date()
+                    ->sortable(),
+
+                TextColumn::make('location')
+                    ->label('Lokasi')
+                    ->searchable()
+                    ->sortable(),
+
+                IconColumn::make('is_active')
+                    ->label('Status Aktif')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->trueColor('success')
+                    ->falseColor('danger'),
+
+                IconColumn::make('is_featured')
+                    ->label('Unggulan')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-star')
+                    ->falseIcon('heroicon-o-star'),
+
+                TextColumn::make('registrations_count')
+                    ->label('Jumlah Peserta')
                     ->counts('registrations')
-                    ->sortable(),
-                
-                TextColumn::make('creator.name')
-                    ->label('Created By')
-                    ->sortable(),
-                
+                    ->badge()
+                    ->color('info'),
+
                 TextColumn::make('created_at')
-                    ->label('Created')
-                    ->dateTime('d/m/Y H:i')
+                    ->label('Dibuat Pada')
+                    ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('event_status')
-                    ->label('Event Status')
+                SelectFilter::make('status')
                     ->options([
-                        'upcoming' => 'Upcoming',
-                        'today' => 'Today',
-                        'past' => 'Past',
+                        'upcoming' => 'Akan Datang',
+                        'today' => 'Hari Ini',
+                        'past' => 'Sudah Lewat',
                     ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return match ($data['value']) {
-                            'upcoming' => $query->where('event_date', '>', now()),
-                            'today' => $query->whereDate('event_date', now()),
-                            'past' => $query->where('event_date', '<', now()),
-                            default => $query,
-                        };
-                    }),
-                
-                SelectFilter::make('created_by')
-                    ->label('Created By')
-                    ->relationship('creator', 'name'),
+                    ->label('Status Acara'),
+
+                TernaryFilter::make('is_active')
+                    ->label('Status Aktif'),
+
+                TernaryFilter::make('is_featured')
+                    ->label('Acara Unggulan'),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                    DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -160,11 +194,88 @@ class EventResource extends Resource
             ->defaultSort('event_date', 'asc');
     }
 
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                Section::make('Informasi Acara')
+                    ->schema([
+                        Grid::make(2)
+                            ->schema([
+                                TextEntry::make('title')
+                                    ->label('Judul Acara')
+                                    ->size(TextEntry\TextEntrySize::Large)
+                                    ->weight('bold'),
+
+                                TextEntry::make('event_date')
+                                    ->label('Tanggal Acara')
+                                    ->date()
+                                    ->icon('heroicon-m-calendar'),
+
+                                TextEntry::make('location')
+                                    ->label('Lokasi')
+                                    ->icon('heroicon-m-map-pin'),
+
+                                TextEntry::make('description')
+                                    ->label('Deskripsi')
+                                    ->markdown()
+                                    ->columnSpan(2),
+                            ]),
+
+                        ImageEntry::make('image')
+                            ->label('Gambar Acara')
+                            ->circular()
+                            ->size(100),
+                    ])->columns(2),
+
+                Section::make('Status & Pengaturan')
+                    ->schema([
+                        Grid::make(2)
+                            ->schema([
+                                IconEntry::make('is_active')
+                                    ->label('Status Aktif')
+                                    ->boolean()
+                                    ->trueIcon('heroicon-o-check-circle')
+                                    ->falseIcon('heroicon-o-x-circle')
+                                    ->trueColor('success')
+                                    ->falseColor('danger'),
+
+                                IconEntry::make('is_featured')
+                                    ->label('Acara Unggulan')
+                                    ->boolean()
+                                    ->trueIcon('heroicon-o-star')
+                                    ->falseIcon('heroicon-o-star')
+                                    ->trueColor('warning'),
+                            ]),
+                    ])->columns(2)->collapsible(),
+
+                Section::make('Informasi Sistem')
+                    ->schema([
+                        Grid::make(3)
+                            ->schema([
+                                TextEntry::make('creator.name')
+                                    ->label('Dibuat Oleh')
+                                    ->icon('heroicon-m-user'),
+
+                                TextEntry::make('created_at')
+                                    ->label('Dibuat Pada')
+                                    ->dateTime()
+                                    ->icon('heroicon-m-calendar'),
+
+                                TextEntry::make('updated_at')
+                                    ->label('Diperbarui Pada')
+                                    ->dateTime()
+                                    ->icon('heroicon-m-clock'),
+                            ]),
+                    ])->columns(3)->collapsible(),
+            ]);
+    }
+
     public static function getRelations(): array
     {
         return [
-            // RelationManagers\RegistrationsRelationManager::class,
-            // RelationManagers\GalleryRelationManager::class,
+            RelationManagers\EventGalleriesRelationManager::class,
+            RelationManagers\EventRegistrationsRelationManager::class,
         ];
     }
 
@@ -173,13 +284,14 @@ class EventResource extends Resource
         return [
             'index' => Pages\ListEvents::route('/'),
             'create' => Pages\CreateEvent::route('/create'),
-            'view' => Pages\ViewEvent::route('/{record}'),
             'edit' => Pages\EditEvent::route('/{record}/edit'),
+            'view' => Pages\ViewEvent::route('/{record}'),
         ];
     }
 
-    public static function getNavigationBadge(): ?string
+    public static function getEloquentQuery(): Builder
     {
-        return static::getModel()::count();
+        return parent::getEloquentQuery()
+            ->with(['creator', 'registrations', 'gallery']);
     }
 }

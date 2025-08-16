@@ -11,6 +11,7 @@ Backend API untuk platform komunitas Islam Sesuai Sunnah yang dibangun dengan La
 - **SQLite Database**: Database ringan untuk development
 - **Event Documentation**: Comprehensive event documentation management system
 - **E-book Management**: Complete digital library system with audiobook support
+- **Color Scheme Management**: Centralized color system with API endpoints
 
 ## 🛠️ Tech Stack
 
@@ -21,6 +22,32 @@ Backend API untuk platform komunitas Islam Sesuai Sunnah yang dibangun dengan La
 - **Database**: SQLite (development), MySQL (production)
 - **Package Manager**: Composer
 
+## 🎨 Color Scheme
+
+Aplikasi menggunakan skema warna yang konsisten dan terstandarisasi:
+
+- **Primary**: `#005555` - Warna utama brand
+- **Secondary**: `#FFC700` - Warna aksen dan highlight
+- **Accent**: `#0ea5e9` - Warna informasi dan link
+- **Semantic Colors**: Success, Warning, Error untuk status
+
+### Color Management
+- **Configuration**: `config/colors.php`
+- **Helper Class**: `App\Helpers\ColorHelper`
+- **API Endpoints**: `/api/colors/*`
+- **Documentation**: `docs/COLOR_SCHEME.md`
+
+### Color API Endpoints
+```bash
+GET /api/colors                    # Get complete color scheme
+GET /api/colors/css-variables     # Get CSS variables
+GET /api/colors/primary           # Get primary colors
+GET /api/colors/secondary         # Get secondary colors
+GET /api/colors/semantic          # Get semantic colors
+GET /api/colors/get?key=primary.main  # Get specific color
+POST /api/colors/variations       # Generate color variations
+```
+
 ## 📁 Struktur Proyek
 
 ```
@@ -28,20 +55,38 @@ app/
 ├── Models/              # Eloquent models
 ├── Http/                # Controllers, Middleware, Requests
 │   ├── Controllers/     # API Controllers
+│   │   └── Api/         # API Controllers
+│   │       ├── ColorSchemeController.php
+│   │       ├── EventController.php
+│   │       ├── EbookController.php
+│   │       └── EventRegistrationController.php
 │   ├── Middleware/      # Custom middleware
 │   └── Requests/        # Form requests
 ├── Providers/           # Service providers
 │   └── Filament/        # Filament admin panel providers
+├── Helpers/             # Helper classes
+│   └── ColorHelper.php  # Color management helper
 └── Console/             # Artisan commands
+
+config/
+├── colors.php           # Color scheme configuration
+├── app.php              # Application configuration
+└── ...                  # Other config files
 
 database/
 ├── migrations/          # Database migrations
 ├── seeders/            # Database seeders
 └── factories/          # Model factories
 
-config/                  # Configuration files
-routes/                  # API routes
-docs/                    # API documentation
+routes/
+├── api.php             # API routes including color scheme
+└── web.php             # Web routes
+
+docs/
+├── COLOR_SCHEME.md     # Color scheme documentation
+├── EBOOK_MANAGEMENT_API.md
+├── EVENT_DOCUMENTATION_API.md
+└── PHASE_2_3_SUMMARY.md
 ```
 
 ## 🚀 Getting Started
@@ -116,6 +161,15 @@ php artisan serve
 - **audit_logs**: System activity logs
 
 ## 🎯 API Endpoints
+
+### Color Scheme
+- `GET /api/colors` - Get complete color scheme
+- `GET /api/colors/css-variables` - Get CSS variables
+- `GET /api/colors/primary` - Get primary colors
+- `GET /api/colors/secondary` - Get secondary colors
+- `GET /api/colors/semantic` - Get semantic colors
+- `GET /api/colors/get?key=primary.main` - Get specific color
+- `POST /api/colors/variations` - Generate color variations
 
 ### Authentication
 - `POST /api/auth/login` - Login dengan OTP
@@ -202,6 +256,17 @@ php artisan serve
 - **Summary**: `docs/PHASE_2_4_SUMMARY.md`
 - **Test Coverage**: 22 tests passing ✅
 
+#### Color Scheme Implementation ✅
+- **Status**: COMPLETED
+- **Features**:
+  - Centralized color configuration
+  - Color helper class with utility methods
+  - API endpoints for color scheme
+  - Frontend-backend color consistency
+  - Comprehensive documentation
+- **Documentation**: `docs/COLOR_SCHEME.md`
+- **API Endpoints**: `/api/colors/*`
+
 ### 🔄 In Progress
 - Phase 2.5: Event Reports & Export (pending)
 
@@ -209,6 +274,7 @@ php artisan serve
 
 - [x] ~~Implementasi Event Documentation API~~ ✅ COMPLETED (Phase 2.3)
 - [x] ~~Implementasi E-book Management API~~ ✅ COMPLETED (Phase 2.4)
+- [x] ~~Implementasi Color Scheme~~ ✅ COMPLETED
 - [ ] Implementasi Event Reports & Export API (Phase 2.5)
 - [ ] Implementasi OTP authentication via WhatsApp
 - [ ] Implementasi notification system
@@ -253,6 +319,7 @@ php artisan test --filter=EbookManagementTest
 ### API Documentation
 - **Event Documentation**: `docs/EVENT_DOCUMENTATION_API.md`
 - **E-book Management**: `docs/EBOOK_MANAGEMENT_API.md`
+- **Color Scheme**: `docs/COLOR_SCHEME.md`
 
 ### Phase Summaries
 - **Phase 2.3**: `docs/PHASE_2_3_SUMMARY.md`
@@ -272,6 +339,14 @@ php artisan test --filter=EbookManagementTest
 - ✅ **Comprehensive Testing** with full coverage
 - ✅ **Production Ready** architecture and security
 
-The platform now has a complete digital library system ready for frontend integration and production deployment.
+**Color Scheme Implementation** has been completed with:
+
+- ✅ **Centralized Configuration** for consistent colors
+- ✅ **Helper Class** with utility methods
+- ✅ **API Endpoints** for color management
+- ✅ **Frontend Integration** with Tailwind CSS
+- ✅ **Comprehensive Documentation** and guidelines
+
+The platform now has a complete digital library system and consistent color scheme ready for frontend integration and production deployment.
 
 **Next Phase**: Ready for Phase 2.5 (Event Reports & Export) or frontend integration work.
