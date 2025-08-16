@@ -25,13 +25,19 @@ class EventController extends Controller
         if ($request->has('status')) {
             switch ($request->status) {
                 case 'upcoming':
-                    $query->where('event_date', '>', now());
+                    $query->where('start_date', '>', now());
                     break;
                 case 'today':
-                    $query->whereDate('event_date', now());
+                    $query->whereDate('start_date', now());
                     break;
                 case 'past':
-                    $query->where('event_date', '<', now());
+                    $query->where('end_date', '<', now());
+                    break;
+                case 'registration_open':
+                    $query->canAcceptRegistrations();
+                    break;
+                case 'event_closed':
+                    $query->closed();
                     break;
             }
         }
@@ -90,9 +96,10 @@ class EventController extends Controller
     {
         $events = Event::with(['creator:id,name'])
             ->withCount('registrations')
-            ->where('event_date', '>', now())
-            ->where('event_date', '<=', now()->addDays(30))
-            ->orderBy('event_date', 'asc')
+            ->where('start_date', '>', now())
+            ->where('start_date', '<=', now()->addDays(30))
+            ->where('status', '!=', 'event_closed')
+            ->orderBy('start_date', 'asc')
             ->limit(5)
             ->get();
 
@@ -109,7 +116,8 @@ class EventController extends Controller
     {
         $events = Event::with(['creator:id,name'])
             ->withCount('registrations')
-            ->where('event_date', '>=', now())
+            ->where('start_date', '>=', now())
+            ->where('status', '!=', 'event_closed')
             ->orderBy('registrations_count', 'desc')
             ->limit(3)
             ->get();
@@ -142,7 +150,8 @@ class EventController extends Controller
                 'event' => [
                     'id' => $event->id,
                     'title' => $event->title,
-                    'event_date' => $event->event_date->format('Y-m-d'),
+                    'start_date' => $event->start_date->format('Y-m-d H:i'),
+                    'end_date' => $event->end_date->format('Y-m-d H:i'),
                 ],
                 'documentation' => $documentation->map(function ($item) {
                     return [
@@ -195,9 +204,14 @@ class EventController extends Controller
             return [
                 'id' => $event->id,
                 'title' => $event->title,
-                'event_date' => $event->event_date->format('Y-m-d'),
+                'start_date' => $event->start_date->format('Y-m-d H:i'),
+                'end_date' => $event->end_date->format('Y-m-d H:i'),
                 'creator' => $event->creator,
                 'participants_count' => $event->registrations_count,
+                'current_participants' => $event->current_participants,
+                'max_participants' => $event->max_participants,
+                'registration_status' => $event->registration_status_text,
+                'can_register' => $event->can_accept_registrations,
                 'documentation_summary' => [
                     'total_files' => $event->gallery_count,
                     'photos' => $gallerySummary->get('photo', 0),

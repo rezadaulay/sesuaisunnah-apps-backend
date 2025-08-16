@@ -16,12 +16,28 @@ class Event extends Model
         'description',
         'featured_image',
         'event_date',
+        'start_date',
+        'end_date',
+        'location',
         'documentation_desc',
         'created_by',
+        'registration_opens_at',
+        'registration_closes_at',
+        'max_participants',
+        'current_participants',
+        'status',
+        'event_closed_at',
+        'allow_gallery_after_close',
     ];
 
     protected $casts = [
         'event_date' => 'date',
+        'start_date' => 'datetime',
+        'end_date' => 'datetime',
+        'registration_opens_at' => 'datetime',
+        'registration_closes_at' => 'datetime',
+        'event_closed_at' => 'datetime',
+        'allow_gallery_after_close' => 'boolean',
     ];
 
     /**
@@ -78,5 +94,183 @@ class Event extends Model
     public function getIsTodayAttribute(): bool
     {
         return $this->event_date->isToday();
+    }
+
+    /**
+     * Check if registration is open.
+     */
+    public function getIsRegistrationOpenAttribute(): bool
+    {
+        if ($this->status === 'event_closed') {
+            return false;
+        }
+
+        $now = now();
+        
+        // Check if registration period is set
+        if ($this->registration_opens_at && $this->registration_closes_at) {
+            return $now->between($this->registration_opens_at, $this->registration_closes_at);
+        }
+
+        // If no specific registration period, check status
+        return $this->status === 'registration_open';
+    }
+
+    /**
+     * Check if event can accept registrations.
+     */
+    public function getCanAcceptRegistrationsAttribute(): bool
+    {
+        if (!$this->is_registration_open) {
+            return false;
+        }
+
+        // Check quota if set
+        if ($this->max_participants && $this->current_participants >= $this->max_participants) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if event is closed.
+     */
+    public function getIsEventClosedAttribute(): bool
+    {
+        return $this->status === 'event_closed';
+    }
+
+    /**
+     * Check if gallery can be updated after event closure.
+     */
+    public function getCanUpdateGalleryAttribute(): bool
+    {
+        return $this->is_event_closed && $this->allow_gallery_after_close;
+    }
+
+    /**
+     * Get available spots for registration.
+     */
+    public function getAvailableSpotsAttribute(): ?int
+    {
+        if (!$this->max_participants) {
+            return null; // Unlimited
+        }
+
+        return max(0, $this->max_participants - $this->current_participants);
+    }
+
+    /**
+     * Get registration status text.
+     */
+    public function getRegistrationStatusTextAttribute(): string
+    {
+        if ($this->is_event_closed) {
+            return 'Event Closed';
+        }
+
+        if (!$this->is_registration_open) {
+            if ($this->registration_opens_at && now() < $this->registration_opens_at) {
+                return 'Registration Not Yet Open';
+            }
+            if ($this->registration_closes_at && now() > $this->registration_closes_at) {
+                return 'Registration Closed';
+            }
+            return 'Registration Closed';
+        }
+
+        if ($this->max_participants) {
+            if ($this->available_spots === 0) {
+                return 'Fully Booked';
+            }
+            return "Available: {$this->available_spots} spots";
+        }
+
+        return 'Open for Registration';
+    }
+
+    /**
+     * Get status badge color.
+     */
+    public function getStatusColorAttribute(): string
+    {
+        return match($this->status) {
+            'draft' => 'gray',
+            'published' => 'info',
+            'registration_open' => 'success',
+            'registration_closed' => 'warning',
+            'event_closed' => 'danger',
+            default => 'gray',
+        };
+    }
+
+    /**
+     * Scope for events with open registration.
+     */
+    public function scopeRegistrationOpen($query)
+    {
+        return $query->where('status', 'registration_open')
+            ->where(function ($q) {
+                $q->whereNull('max_participants')
+                  ->orWhere('current_participants', '<', 'max_participants');
+            });
+    }
+
+    /**
+     * Scope for events that can accept registrations.
+     */
+    public function scopeCanAcceptRegistrations($query)
+    {
+        return $query->where('status', '!=', 'event_closed')
+            ->where(function ($q) {
+                $q->whereNull('max_participants')
+                  ->orWhere('current_participants', '<', 'max_participants');
+            });
+    }
+
+    /**
+     * Scope for closed events.
+     */
+    public function scopeClosed($query)
+    {
+        return $query->where('status', 'event_closed');
+    }
+
+    /**
+     * Increment participant count.
+     */
+    public function incrementParticipants(): void
+    {
+        $this->increment('current_participants');
+    }
+
+    /**
+     * Decrement participant count.
+     */
+    public function decrementParticipants(): void
+    {
+        $this->decrement('current_participants');
+    }
+
+    /**
+     * Close event.
+     */
+    public function closeEvent(): void
+    {
+        $this->update([
+            'status' => 'event_closed',
+            'event_closed_at' => now(),
+        ]);
+    }
+
+    /**
+     * Open event for gallery updates.
+     */
+    public function openForGallery(): void
+    {
+        $this->update([
+            'allow_gallery_after_close' => true,
+        ]);
     }
 }

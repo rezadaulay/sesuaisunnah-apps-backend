@@ -16,6 +16,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\Grid;
+
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\Section as FormSection;
@@ -72,17 +73,23 @@ class EventResource extends Resource
 
                         FormGrid::make(2)
                             ->schema([
-                                DatePicker::make('event_date')
-                                    ->label('Tanggal Acara')
-                                    ->required(),
+                                DatePicker::make('start_date')
+                                    ->label('Tanggal & Waktu Mulai')
+                                    ->required()
+                                    ->seconds(false),
 
-                                TextInput::make('location')
-                                    ->label('Lokasi')
-                                    ->maxLength(255)
-                                    ->placeholder('Masukkan lokasi acara'),
+                                DatePicker::make('end_date')
+                                    ->label('Tanggal & Waktu Selesai')
+                                    ->required()
+                                    ->seconds(false),
                             ]),
 
-                        FileUpload::make('image')
+                        TextInput::make('location')
+                            ->label('Lokasi')
+                            ->maxLength(255)
+                            ->placeholder('Masukkan lokasi acara'),
+
+                        FileUpload::make('featured_image')
                             ->label('Gambar Acara')
                             ->image()
                             ->imageEditor()
@@ -90,7 +97,56 @@ class EventResource extends Resource
                             ->placeholder('Upload gambar acara'),
                     ])->columns(1),
 
-                FormSection::make('Pengaturan')
+                FormSection::make('Pengaturan Registrasi')
+                    ->schema([
+                        Select::make('status')
+                            ->label('Status Acara')
+                            ->options([
+                                'draft' => 'Draft',
+                                'published' => 'Published',
+                                'registration_open' => 'Registrasi Dibuka',
+                                'registration_closed' => 'Registrasi Ditutup',
+                                'event_closed' => 'Event Ditutup',
+                            ])
+                            ->default('draft')
+                            ->required(),
+
+                        FormGrid::make(2)
+                            ->schema([
+                                DatePicker::make('registration_opens_at')
+                                    ->label('Registrasi Dibuka Pada')
+                                    ->seconds(false)
+                                    ->placeholder('Opsional - Kosongkan jika tidak ada batasan'),
+
+                                DatePicker::make('registration_closes_at')
+                                    ->label('Registrasi Ditutup Pada')
+                                    ->seconds(false)
+                                    ->placeholder('Opsional - Kosongkan jika tidak ada batasan'),
+                            ]),
+
+                        FormGrid::make(2)
+                            ->schema([
+                                TextInput::make('max_participants')
+                                    ->label('Kuota Maksimal')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->placeholder('Opsional - Kosongkan jika tidak terbatas'),
+
+                                TextInput::make('current_participants')
+                                    ->label('Peserta Saat Ini')
+                                    ->numeric()
+                                    ->default(0)
+                                    ->disabled()
+                                    ->helperText('Otomatis terupdate saat ada registrasi'),
+                            ]),
+
+                        Toggle::make('allow_gallery_after_close')
+                            ->label('Izinkan Update Gallery Setelah Event Ditutup')
+                            ->default(false)
+                            ->helperText('Ketika diaktifkan, admin bisa menambah foto gallery setelah event ditutup'),
+                    ])->columns(1)->collapsible(),
+
+                FormSection::make('Pengaturan Umum')
                     ->schema([
                         FormGrid::make(2)
                             ->schema([
@@ -102,7 +158,6 @@ class EventResource extends Resource
                                     ->label('Acara Unggulan')
                                     ->default(false),
                             ]),
-
                     ])->columns(2)->collapsible(),
             ]);
     }
@@ -128,15 +183,46 @@ class EventResource extends Resource
                     ->limit(80)
                     ->toggleable(),
 
-                TextColumn::make('event_date')
-                    ->label('Tanggal Acara')
-                    ->date()
+                BadgeColumn::make('status')
+                    ->label('Status')
+                    ->colors([
+                        'gray' => 'draft',
+                        'info' => 'published',
+                        'success' => 'registration_open',
+                        'warning' => 'registration_closed',
+                        'danger' => 'event_closed',
+                    ]),
+
+                TextColumn::make('start_date')
+                    ->label('Tanggal Mulai')
+                    ->dateTime('M d, Y H:i')
+                    ->sortable(),
+
+                TextColumn::make('end_date')
+                    ->label('Tanggal Selesai')
+                    ->dateTime('M d, Y H:i')
                     ->sortable(),
 
                 TextColumn::make('location')
                     ->label('Lokasi')
                     ->searchable()
                     ->sortable(),
+
+                TextColumn::make('current_participants')
+                    ->label('Peserta')
+                    ->badge()
+                    ->color('info')
+                    ->formatStateUsing(function ($state, $record) {
+                        if ($record->max_participants) {
+                            return "{$state}/{$record->max_participants}";
+                        }
+                        return $state;
+                    }),
+
+                TextColumn::make('registration_status_text')
+                    ->label('Status Registrasi')
+                    ->badge()
+                    ->color(fn ($record) => $record->status_color),
 
                 IconColumn::make('is_active')
                     ->label('Status Aktif')
@@ -152,12 +238,6 @@ class EventResource extends Resource
                     ->trueIcon('heroicon-o-star')
                     ->falseIcon('heroicon-o-star'),
 
-                TextColumn::make('registrations_count')
-                    ->label('Jumlah Peserta')
-                    ->counts('registrations')
-                    ->badge()
-                    ->color('info'),
-
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
                     ->dateTime()
@@ -167,22 +247,67 @@ class EventResource extends Resource
             ->filters([
                 SelectFilter::make('status')
                     ->options([
-                        'upcoming' => 'Akan Datang',
-                        'today' => 'Hari Ini',
-                        'past' => 'Sudah Lewat',
+                        'draft' => 'Draft',
+                        'published' => 'Published',
+                        'registration_open' => 'Registrasi Dibuka',
+                        'registration_closed' => 'Registrasi Ditutup',
+                        'event_closed' => 'Event Ditutup',
                     ])
                     ->label('Status Acara'),
+
+                SelectFilter::make('registration_status')
+                    ->options([
+                        'open' => 'Bisa Daftar',
+                        'closed' => 'Tidak Bisa Daftar',
+                        'full' => 'Kuota Penuh',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value']) {
+                            'open' => $query->canAcceptRegistrations(),
+                            'closed' => $query->where('status', '!=', 'registration_open'),
+                            'full' => $query->whereRaw('current_participants >= max_participants'),
+                            default => $query,
+                        };
+                    })
+                    ->label('Status Registrasi'),
 
                 TernaryFilter::make('is_active')
                     ->label('Status Aktif'),
 
                 TernaryFilter::make('is_featured')
                     ->label('Acara Unggulan'),
+
+                TernaryFilter::make('allow_gallery_after_close')
+                    ->label('Bisa Update Gallery Setelah Tutup'),
             ])
             ->actions([
                 ActionGroup::make([
                     ViewAction::make(),
                     EditAction::make(),
+                    Tables\Actions\Action::make('close_event')
+                        ->label('Tutup Event')
+                        ->icon('heroicon-m-x-circle')
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalHeading('Tutup Event')
+                        ->modalDescription('Apakah Anda yakin ingin menutup event ini? Event yang ditutup tidak bisa menerima registrasi baru.')
+                        ->action(function (Event $record) {
+                            $record->closeEvent();
+                        })
+                        ->visible(fn (Event $record) => $record->status !== 'event_closed'),
+
+                    Tables\Actions\Action::make('open_gallery')
+                        ->label('Buka untuk Gallery')
+                        ->icon('heroicon-m-photo')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->modalHeading('Buka Event untuk Update Gallery')
+                        ->modalDescription('Apakah Anda yakin ingin membuka event ini untuk update gallery?')
+                        ->action(function (Event $record) {
+                            $record->openForGallery();
+                        })
+                        ->visible(fn (Event $record) => $record->status === 'event_closed' && !$record->allow_gallery_after_close),
+
                     DeleteAction::make(),
                 ]),
             ])
@@ -232,6 +357,48 @@ class EventResource extends Resource
                     ->schema([
                         Grid::make(2)
                             ->schema([
+                                TextEntry::make('status')
+                                    ->label('Status Acara')
+                                    ->badge()
+                                    ->color(fn ($record) => $record->status_color),
+
+                                TextEntry::make('registration_status_text')
+                                    ->label('Status Registrasi')
+                                    ->badge()
+                                    ->color(fn ($record) => $record->status_color),
+                            ]),
+
+                        Grid::make(2)
+                            ->schema([
+                                TextEntry::make('current_participants')
+                                    ->label('Peserta Saat Ini')
+                                    ->badge()
+                                    ->color('info'),
+
+                                TextEntry::make('max_participants')
+                                    ->label('Kuota Maksimal')
+                                    ->badge()
+                                    ->color('warning')
+                                    ->formatStateUsing(fn ($state) => $state ?: 'Tidak Terbatas'),
+                            ]),
+
+                        Grid::make(2)
+                            ->schema([
+                                TextEntry::make('registration_opens_at')
+                                    ->label('Registrasi Dibuka')
+                                    ->dateTime('M d, Y H:i')
+                                    ->icon('heroicon-m-calendar')
+                                    ->formatStateUsing(fn ($state) => $state ?: 'Tidak Ditetapkan'),
+
+                                TextEntry::make('registration_closes_at')
+                                    ->label('Registrasi Ditutup')
+                                    ->dateTime('M d, Y H:i')
+                                    ->icon('heroicon-m-calendar')
+                                    ->formatStateUsing(fn ($state) => $state ?: 'Tidak Ditetapkan'),
+                            ]),
+
+                        Grid::make(2)
+                            ->schema([
                                 IconEntry::make('is_active')
                                     ->label('Status Aktif')
                                     ->boolean()
@@ -246,6 +413,23 @@ class EventResource extends Resource
                                     ->trueIcon('heroicon-o-star')
                                     ->falseIcon('heroicon-o-star')
                                     ->trueColor('warning'),
+                            ]),
+
+                        Grid::make(2)
+                            ->schema([
+                                IconEntry::make('allow_gallery_after_close')
+                                    ->label('Bisa Update Gallery Setelah Tutup')
+                                    ->boolean()
+                                    ->trueIcon('heroicon-o-photo')
+                                    ->falseIcon('heroicon-o-x-circle')
+                                    ->trueColor('success')
+                                    ->falseColor('danger'),
+
+                                TextEntry::make('event_closed_at')
+                                    ->label('Event Ditutup Pada')
+                                    ->dateTime('M d, Y H:i')
+                                    ->icon('heroicon-m-clock')
+                                    ->formatStateUsing(fn ($state) => $state ?: 'Belum Ditutup'),
                             ]),
                     ])->columns(2)->collapsible(),
 

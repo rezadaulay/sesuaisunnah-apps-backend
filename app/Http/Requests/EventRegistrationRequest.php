@@ -27,13 +27,13 @@ class EventRegistrationRequest extends FormRequest
             'name' => ['required', 'string', 'max:150'],
             'gender' => ['required', 'in:male,female'],
             'phone' => [
-                'required', 
-                'string', 
+                'required',
+                'string',
                 'max:20',
                 'regex:/^(\+62|62|0)8[1-9][0-9]{6,9}$/'
             ],
             'email' => ['nullable', 'email', 'max:150'],
-            'referral_source' => ['nullable', 'string', 'max:150'],
+            'referral_source' => ['nullable', 'string', 'max:150', 'in:website,instagram,facebook,whatsapp,friend,email,other'],
         ];
     }
 

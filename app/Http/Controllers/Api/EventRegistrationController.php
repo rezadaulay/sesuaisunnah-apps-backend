@@ -22,13 +22,13 @@ class EventRegistrationController extends Controller
         try {
             DB::beginTransaction();
 
-            // Check if event exists and is not past
+            // Check if event exists and can accept registrations
             $event = Event::findOrFail($request->event_id);
-            
-            if ($event->event_date < now()) {
+
+            if (!$event->can_accept_registrations) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Event sudah berakhir.',
+                    'message' => $event->registration_status_text,
                 ], 400);
             }
 
@@ -72,6 +72,9 @@ class EventRegistrationController extends Controller
                 'registered_at' => now(),
             ]);
 
+            // Increment participant count
+            $event->incrementParticipants();
+
             // Assign member role if user doesn't have it
             if (!$user->hasRole('member')) {
                 $user->assignRole('member');
@@ -96,8 +99,12 @@ class EventRegistrationController extends Controller
                     'event' => [
                         'id' => $event->id,
                         'title' => $event->title,
-                        'event_date' => $event->event_date->format('d/m/Y'),
+                        'start_date' => $event->start_date->format('d/m/Y H:i'),
+                        'end_date' => $event->end_date->format('d/m/Y H:i'),
                         'description' => $event->description,
+                        'current_participants' => $event->current_participants,
+                        'max_participants' => $event->max_participants,
+                        'available_spots' => $event->available_spots,
                     ],
                     'user' => [
                         'id' => $user->id,
@@ -112,7 +119,7 @@ class EventRegistrationController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Event registration failed', [
                 'error' => $e->getMessage(),
                 'request_data' => $request->validated(),
@@ -139,7 +146,7 @@ class EventRegistrationController extends Controller
             ], 404);
         }
 
-        $registrations = EventRegistration::with(['event:id,title,event_date,description,featured_image'])
+        $registrations = EventRegistration::with(['event:id,title,start_date,end_date,description,featured_image,status,current_participants,max_participants'])
             ->where('user_id', $user->id)
             ->orderBy('registered_at', 'desc')
             ->get();
@@ -159,9 +166,13 @@ class EventRegistrationController extends Controller
                         'event' => [
                             'id' => $registration->event->id,
                             'title' => $registration->event->title,
-                            'event_date' => $registration->event->event_date->format('d/m/Y'),
+                            'start_date' => $registration->event->start_date->format('d/m/Y H:i'),
+                            'end_date' => $registration->event->end_date->format('d/m/Y H:i'),
                             'description' => $registration->event->description,
                             'featured_image' => $registration->event->featured_image,
+                            'status' => $registration->event->status,
+                            'current_participants' => $registration->event->current_participants,
+                            'max_participants' => $registration->event->max_participants,
                         ],
                         'registered_at' => $registration->registered_at->format('d/m/Y H:i'),
                         'referral_source' => $registration->referral_source,
@@ -198,13 +209,16 @@ class EventRegistrationController extends Controller
 
         // Check if event is not today or past
         $event = Event::find($eventId);
-        if ($event->event_date <= now()) {
+        if ($event->start_date <= now()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Tidak dapat membatalkan pendaftaran untuk event yang sudah berlangsung atau berakhir.',
             ], 400);
         }
 
+        // Decrement participant count
+        $event->decrementParticipants();
+        
         $registration->delete();
 
         return response()->json([

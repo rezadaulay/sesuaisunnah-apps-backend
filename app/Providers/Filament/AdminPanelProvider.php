@@ -47,6 +47,7 @@ class AdminPanelProvider extends PanelProvider
                 \App\Filament\Widgets\StatsOverview::class,
                 \App\Filament\Widgets\DonationChart::class,
                 \App\Filament\Widgets\LatestDonations::class,
+                \App\Filament\Widgets\EventRegistrationStats::class,
             ])
             ->middleware([
                 EncryptCookies::class,
