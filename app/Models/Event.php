@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class Event extends Model
 {
@@ -14,9 +15,9 @@ class Event extends Model
 
     protected $fillable = [
         'title',
+        'slug',
         'description',
         'featured_image',
-        'event_date',
         'start_date',
         'end_date',
         'location',
@@ -29,10 +30,10 @@ class Event extends Model
         'status',
         'event_closed_at',
         'requires_registration',
+        'is_featured',
     ];
 
     protected $casts = [
-        'event_date' => 'date',
         'start_date' => 'datetime',
         'end_date' => 'datetime',
         'registration_opens_at' => 'datetime',
@@ -44,6 +45,19 @@ class Event extends Model
     protected static function boot()
     {
         parent::boot();
+
+        // Auto-generate slug from title
+        static::creating(function ($event) {
+            if (empty($event->slug)) {
+                $event->slug = $event->generateUniqueSlug();
+            }
+        });
+
+        static::updating(function ($event) {
+            if ($event->isDirty('title') && empty($event->slug)) {
+                $event->slug = $event->generateUniqueSlug();
+            }
+        });
 
         // Auto-sync status with registration dates
         static::saving(function ($event) {
@@ -101,7 +115,7 @@ class Event extends Model
      */
     public function getIsUpcomingAttribute(): bool
     {
-        return $this->event_date->isFuture();
+        return $this->start_date && $this->start_date->isFuture();
     }
 
     /**
@@ -109,7 +123,7 @@ class Event extends Model
      */
     public function getIsPastAttribute(): bool
     {
-        return $this->event_date->isPast();
+        return $this->end_date && $this->end_date->isPast();
     }
 
     /**
@@ -117,7 +131,7 @@ class Event extends Model
      */
     public function getIsTodayAttribute(): bool
     {
-        return $this->event_date->isToday();
+        return $this->start_date && $this->start_date->isToday();
     }
 
     /**
@@ -303,5 +317,23 @@ class Event extends Model
             'status' => 'event_closed',
             'event_closed_at' => now(),
         ]);
+    }
+
+    /**
+     * Generate unique slug from title.
+     */
+    public function generateUniqueSlug(): string
+    {
+        $baseSlug = Str::slug($this->title);
+        $slug = $baseSlug;
+        $counter = 1;
+
+        // Ensure unique slug
+        while (static::where('slug', $slug)->where('id', '!=', $this->id)->exists()) {
+            $slug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
     }
 }

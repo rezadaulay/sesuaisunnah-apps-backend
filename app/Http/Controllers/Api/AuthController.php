@@ -3,20 +3,30 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RegistrationRequest;
 use App\Models\OtpCode;
 use App\Models\User;
 use App\Models\EventRegistration;
 use App\Models\EbookInteraction;
+use App\Services\OtpService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    protected $otpService;
+
+    public function __construct(OtpService $otpService)
+    {
+        $this->otpService = $otpService;
+    }
+
     /**
-     * Send OTP code to phone number.
+     * Send OTP code to phone number via WhatsApp.
      */
     public function sendOtp(Request $request): JsonResponse
     {
@@ -34,39 +44,13 @@ class AuthController extends Controller
 
         $phone = $request->phone;
 
-        // Check if OTP was recently sent (rate limiting)
-        if (OtpCode::hasValidOtp($phone)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'OTP already sent. Please wait before requesting another.',
-            ], 429);
-        }
+        // Use OTP service to send OTP via WhatsApp
+        $result = $this->otpService->sendOtp($phone);
 
-        try {
-            // Generate OTP code
-            $otp = OtpCode::generateForPhone($phone);
-
-            // TODO: Integrate with SMS service (Twilio, Vonage, etc.)
-            // For now, we'll return the OTP in response for testing
-            // In production, remove this and send via SMS
-
-            return response()->json([
-                'success' => true,
-                'message' => 'OTP sent successfully',
-                'data' => [
-                    'phone' => $phone,
-                    'expires_in' => $otp->remaining_time,
-                    // Remove this in production
-                    'otp_code' => config('app.debug') ? $otp->code : null,
-                ],
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to send OTP',
-                'error' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
+        if ($result['success']) {
+            return response()->json($result);
+        } else {
+            return response()->json($result, $result['code'] ?? 500);
         }
     }
 
@@ -94,12 +78,11 @@ class AuthController extends Controller
         $phone = $request->phone;
         $otp = $request->otp;
 
-        // Verify OTP
-        if (!OtpCode::verify($phone, $otp)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid or expired OTP code',
-            ], 401);
+        // Use OTP service to verify OTP
+        $verificationResult = $this->otpService->verifyOtp($phone, $otp);
+
+        if (!$verificationResult['success']) {
+            return response()->json($verificationResult, $verificationResult['code'] ?? 401);
         }
 
         // Find or create user
@@ -137,6 +120,168 @@ class AuthController extends Controller
     }
 
     /**
+     * Resend OTP code to phone number via WhatsApp.
+     */
+    public function resendOtp(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'phone' => 'required|string|regex:/^[0-9+\-\s()]+$/|min:10|max:20',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $phone = $request->phone;
+
+        // Use OTP service to resend OTP via WhatsApp
+        $result = $this->otpService->resendOtp($phone);
+
+        if ($result['success']) {
+            return response()->json($result);
+        } else {
+            return response()->json($result, $result['code'] ?? 500);
+        }
+    }
+
+    /**
+     * Check user status by phone number.
+     */
+    public function checkUserStatus(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'phone' => 'required|string|regex:/^[0-9+\-\s()]+$/|min:10|max:20',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $phone = $request->phone;
+
+        // Use OTP service to check user status
+        $result = $this->otpService->checkUserStatus($phone);
+
+        if ($result['success']) {
+            return response()->json($result);
+        } else {
+            return response()->json($result, $result['code'] ?? 500);
+        }
+    }
+
+    /**
+     * Register new user/member without password.
+     * After successful registration, OTP will be sent via WhatsApp.
+     */
+    public function register(RegistrationRequest $request): JsonResponse
+    {
+
+        try {
+            // Check if user already exists with same phone
+            $existingUser = User::where('phone', $request->phone)->first();
+            if ($existingUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User with this phone number already exists.',
+                ], 409);
+            }
+
+            // Check if user already exists with same email (if email provided)
+            if ($request->email) {
+                $existingUserWithEmail = User::where('email', $request->email)->first();
+                if ($existingUserWithEmail) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'User with this email already exists.',
+                        'errors' => [
+                            'email' => ['Email sudah terdaftar.']
+                        ]
+                    ], 422);
+                }
+            }
+
+            // Create new user without password
+            $user = User::create([
+                'name' => $request->name,
+                'country_code' => $request->country_code,
+                'phone' => $request->phone,
+                'email' => $request->email,
+                'gender' => $request->gender,
+                'password' => Hash::make(Str::random(16)), // Generate random password for security
+            ]);
+
+            // Send OTP via WhatsApp for verification
+            $otpResult = $this->otpService->sendOtp($request->phone);
+            Log::info($otpResult);
+
+            if ($otpResult['success']) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Registration successful! OTP has been sent to your WhatsApp for verification.',
+                    'data' => [
+                        'user' => [
+                            'id' => $user->id,
+                            'name' => $user->name,
+                            'country_code' => $user->country_code,
+                            'phone' => $user->phone,
+                            'full_phone' => $user->full_phone,
+                            'email' => $user->email,
+                            'gender' => $user->gender,
+                        ],
+                        'otp_info' => [
+                            'phone' => $user->full_phone,
+                            'expires_in' => $otpResult['data']['expires_in'],
+                            'expires_at' => $otpResult['data']['expires_at'],
+                            'delivery_method' => $otpResult['data']['delivery_method'],
+                        ],
+                        'next_step' => 'Verify OTP using /api/auth/verify-otp endpoint to complete authentication.',
+                    ],
+                ], 201);
+            } else {
+                // If OTP sending fails, still create user but inform about OTP issue
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Registration successful! However, there was an issue sending OTP. Please try requesting OTP again.',
+                    'data' => [
+                        'user' => [
+                            'id' => $user->id,
+                            'name' => $user->name,
+                            'country_code' => $user->country_code,
+                            'phone' => $user->phone,
+                            'full_phone' => $user->full_phone,
+                            'email' => $user->email,
+                            'gender' => $user->gender,
+                        ],
+                        'otp_status' => 'failed',
+                        'otp_error' => $otpResult['message'],
+                        'next_step' => 'Try requesting OTP again using /api/auth/send-otp endpoint.',
+                    ],
+                ], 201);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('User registration failed: ' . $e->getMessage(), [
+                'phone' => $request->phone,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Registration failed. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
      * Get user profile.
      */
     public function profile(Request $request): JsonResponse
@@ -148,7 +293,9 @@ class AuthController extends Controller
             'data' => [
                 'id' => $user->id,
                 'name' => $user->name,
+                'country_code' => $user->country_code,
                 'phone' => $user->phone,
+                'full_phone' => $user->full_phone,
                 'email' => $user->email,
                 'gender' => $user->gender,
                 'created_at' => $user->created_at,

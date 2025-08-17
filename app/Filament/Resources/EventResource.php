@@ -16,9 +16,11 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\Grid;
+use Filament\Support\Enums\FontWeight;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Str;
 use Filament\Forms\Components\Section as FormSection;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -27,6 +29,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Grid as FormGrid;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\IconColumn;
@@ -64,7 +67,32 @@ class EventResource extends Resource
                             ->label('Judul Acara')
                             ->required()
                             ->maxLength(255)
-                            ->placeholder('Masukkan judul acara'),
+                            ->placeholder('Masukkan judul acara')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(function ($state, callable $set) {
+                                if ($state) {
+                                    $set('slug', Str::slug($state));
+                                }
+                            }),
+
+                        TextInput::make('slug')
+                            ->label('Slug URL')
+                            ->required()
+                            ->maxLength(255)
+                            ->unique(ignoreRecord: true)
+                            ->placeholder('Slug akan dibuat otomatis dari judul')
+                            ->helperText('URL-friendly identifier untuk event ini')
+                            ->suffixAction(
+                                Action::make('generate-slug')
+                                    ->icon('heroicon-m-arrow-path')
+                                    ->action(function (callable $get, callable $set) {
+                                        $title = $get('title');
+                                        if ($title) {
+                                            $set('slug', Str::slug($title));
+                                        }
+                                    })
+                                    ->tooltip('Generate slug dari judul')
+                            ),
 
                         Textarea::make('description')
                             ->label('Deskripsi')
@@ -89,6 +117,24 @@ class EventResource extends Resource
                             ->maxLength(255)
                             ->placeholder('Masukkan lokasi acara'),
 
+                        Select::make('status')
+                            ->label('Status Acara')
+                            ->options([
+                                'draft' => 'Draft',
+                                'published' => 'Published',
+                                'registration_open' => 'Registrasi Dibuka',
+                                'registration_closed' => 'Registrasi Ditutup',
+                                'event_closed' => 'Event Ditutup',
+                            ])
+                            ->default('draft')
+                            ->required()
+                            ->helperText('Status acara akan mempengaruhi visibilitas di frontend'),
+
+                        Toggle::make('is_featured')
+                            ->label('Acara Unggulan')
+                            ->default(false)
+                            ->helperText('Event unggulan akan ditampilkan di bagian khusus frontend'),
+
                         FileUpload::make('featured_image')
                             ->label('Gambar Acara')
                             ->image()
@@ -103,19 +149,6 @@ class EventResource extends Resource
                             ->label('Menggunakan Form Registrasi')
                             ->default(true)
                             ->helperText('Jika dinonaktifkan, event ini tidak akan menampilkan form registrasi'),
-
-                        Select::make('status')
-                            ->label('Status Acara')
-                            ->options([
-                                'draft' => 'Draft',
-                                'published' => 'Published',
-                                'registration_open' => 'Registrasi Dibuka',
-                                'registration_closed' => 'Registrasi Ditutup',
-                                'event_closed' => 'Event Ditutup',
-                            ])
-                            ->default('draft')
-                            ->required()
-                            ->visible(fn ($get) => $get('requires_registration')),
 
                         FormGrid::make(2)
                             ->schema([
@@ -152,20 +185,6 @@ class EventResource extends Resource
                             ])
                             ->visible(fn ($get) => $get('requires_registration')),
                     ])->columns(1)->collapsible(),
-
-                FormSection::make('Pengaturan Umum')
-                    ->schema([
-                        FormGrid::make(2)
-                            ->schema([
-                                Toggle::make('is_active')
-                                    ->label('Status Aktif')
-                                    ->default(true),
-
-                                Toggle::make('is_featured')
-                                    ->label('Acara Unggulan')
-                                    ->default(false),
-                            ]),
-                    ])->columns(2)->collapsible(),
             ]);
     }
 
@@ -184,6 +203,15 @@ class EventResource extends Resource
                     ->sortable()
                     ->weight('bold')
                     ->limit(50),
+
+                TextColumn::make('slug')
+                    ->label('Slug')
+                    ->searchable()
+                    ->sortable()
+                    ->limit(30)
+                    ->toggleable()
+                    ->copyable()
+                    ->tooltip('Klik untuk copy slug'),
 
                 TextColumn::make('description')
                     ->label('Deskripsi')
@@ -231,19 +259,13 @@ class EventResource extends Resource
                     ->badge()
                     ->color(fn ($record) => $record->status_color),
 
-                IconColumn::make('is_active')
-                    ->label('Status Aktif')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-x-circle')
-                    ->trueColor('success')
-                    ->falseColor('danger'),
-
                 IconColumn::make('is_featured')
                     ->label('Unggulan')
                     ->boolean()
                     ->trueIcon('heroicon-o-star')
-                    ->falseIcon('heroicon-o-star'),
+                    ->falseIcon('heroicon-o-star')
+                    ->trueColor('warning')
+                    ->falseColor('gray'),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat Pada')
@@ -278,9 +300,6 @@ class EventResource extends Resource
                     })
                     ->label('Status Registrasi'),
 
-                TernaryFilter::make('is_active')
-                    ->label('Status Aktif'),
-
                 TernaryFilter::make('is_featured')
                     ->label('Acara Unggulan'),
             ])
@@ -308,7 +327,7 @@ class EventResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('event_date', 'asc');
+            ->defaultSort('start_date', 'asc');
     }
 
     public static function infolist(Infolist $infolist): Infolist
@@ -322,11 +341,22 @@ class EventResource extends Resource
                                 TextEntry::make('title')
                                     ->label('Judul Acara')
                                     ->size(TextEntry\TextEntrySize::Large)
-                                    ->weight('bold'),
+                                    ->weight(FontWeight::Bold)
+                                    ->icon('heroicon-m-megaphone'),
 
-                                TextEntry::make('event_date')
-                                    ->label('Tanggal Acara')
-                                    ->date()
+                                TextEntry::make('slug')
+                                    ->label('Slug')
+                                    ->copyable()
+                                    ->tooltip('Klik untuk copy slug'),
+
+                                TextEntry::make('start_date')
+                                    ->label('Tanggal & Waktu Mulai')
+                                    ->dateTime('M d, Y H:i')
+                                    ->icon('heroicon-m-calendar'),
+
+                                TextEntry::make('end_date')
+                                    ->label('Tanggal & Waktu Selesai')
+                                    ->dateTime('M d, Y H:i')
                                     ->icon('heroicon-m-calendar'),
 
                                 TextEntry::make('location')
@@ -339,7 +369,7 @@ class EventResource extends Resource
                                     ->columnSpan(2),
                             ]),
 
-                        ImageEntry::make('image')
+                        ImageEntry::make('featured_image')
                             ->label('Gambar Acara')
                             ->circular()
                             ->size(100),
@@ -389,29 +419,26 @@ class EventResource extends Resource
                                     ->formatStateUsing(fn ($state) => $state ?: 'Tidak Ditetapkan'),
                             ]),
 
-                        Grid::make(2)
-                            ->schema([
-                                IconEntry::make('is_active')
-                                    ->label('Status Aktif')
-                                    ->boolean()
-                                    ->trueIcon('heroicon-o-check-circle')
-                                    ->falseIcon('heroicon-o-x-circle')
-                                    ->trueColor('success')
-                                    ->falseColor('danger'),
-
-                                IconEntry::make('is_featured')
-                                    ->label('Acara Unggulan')
-                                    ->boolean()
-                                    ->trueIcon('heroicon-o-star')
-                                    ->falseIcon('heroicon-o-star')
-                                    ->trueColor('warning'),
-                            ]),
-
                         TextEntry::make('event_closed_at')
                             ->label('Event Ditutup Pada')
                             ->dateTime('M d, Y H:i')
                             ->icon('heroicon-m-clock')
                             ->formatStateUsing(fn ($state) => $state ?: 'Belum Ditutup'),
+
+                        IconEntry::make('is_featured')
+                            ->label('Acara Unggulan')
+                            ->boolean()
+                            ->trueIcon('heroicon-o-star')
+                            ->falseIcon('heroicon-o-star')
+                            ->trueColor('warning'),
+                    ])->columns(2)->collapsible(),
+
+                Section::make('Dokumentasi')
+                    ->schema([
+                        TextEntry::make('documentation_desc')
+                            ->label('Deskripsi Dokumentasi')
+                            ->markdown()
+                            ->columnSpan(2),
                     ])->columns(2)->collapsible(),
 
                 Section::make('Informasi Sistem')

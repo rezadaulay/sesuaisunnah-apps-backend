@@ -23,6 +23,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'country_code',
         'phone',
         'gender',
     ];
@@ -74,5 +75,32 @@ class User extends Authenticatable
         return $this->belongsToMany(Event::class, 'event_registrations')
                     ->withPivot('referral_source', 'registered_at')
                     ->withTimestamps();
+    }
+
+    /**
+     * Get the full phone number with country code.
+     */
+    public function getFullPhoneAttribute(): string
+    {
+        return $this->country_code . $this->phone;
+    }
+
+    /**
+     * Get the phone number formatted for WhatsApp service (62839999453).
+     */
+    public function getWhatsAppPhoneAttribute(): string
+    {
+        // Remove + from country code and combine with phone
+        $countryCode = str_replace('+', '', $this->country_code);
+        return $countryCode . $this->phone;
+    }
+
+    /**
+     * Set the phone number and automatically format it.
+     */
+    public function setPhoneAttribute($value): void
+    {
+        // Remove any non-digit characters except + for country code
+        $this->attributes['phone'] = preg_replace('/[^0-9]/', '', $value);
     }
 }

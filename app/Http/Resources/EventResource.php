@@ -17,10 +17,14 @@ class EventResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->title,
+            'slug' => $this->slug,
             'description' => $this->description,
             'featured_image' => $this->featured_image,
-            'event_date' => $this->event_date->format('Y-m-d'),
-            'event_date_formatted' => $this->event_date->format('d/m/Y'),
+            'start_date' => $this->start_date?->format('Y-m-d H:i'),
+            'start_date_formatted' => $this->start_date?->format('d/m/Y H:i'),
+            'end_date' => $this->end_date?->format('Y-m-d H:i'),
+            'end_date_formatted' => $this->end_date?->format('d/m/Y H:i'),
+            'location' => $this->location,
             'documentation_desc' => $this->documentation_desc,
             'created_by' => $this->whenLoaded('creator', function () {
                 return [

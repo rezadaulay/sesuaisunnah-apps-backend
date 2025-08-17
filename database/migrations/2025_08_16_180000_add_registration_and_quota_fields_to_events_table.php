@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('events', function (Blueprint $table) {
             // Registration settings
-            $table->timestamp('registration_opens_at')->nullable()->after('end_date');
+            $table->timestamp('registration_opens_at')->nullable()->after('event_date');
             $table->timestamp('registration_closes_at')->nullable()->after('registration_opens_at');
 
             // Quota settings

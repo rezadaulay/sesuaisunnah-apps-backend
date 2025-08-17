@@ -19,7 +19,8 @@ class EventController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Event::with(['creator:id,name', 'registrations:id,event_id,user_id'])
-            ->withCount('registrations');
+            ->withCount('registrations')
+            ->where('status', '!=', 'draft'); // Exclude draft events
 
         // Filter by status
         if ($request->has('status')) {
@@ -44,11 +45,11 @@ class EventController extends Controller
 
         // Filter by date range
         if ($request->has('date_from')) {
-            $query->where('event_date', '>=', $request->date_from);
+            $query->where('start_date', '>=', $request->date_from);
         }
 
         if ($request->has('date_to')) {
-            $query->where('event_date', '<=', $request->date_to);
+            $query->where('start_date', '<=', $request->date_to);
         }
 
         // Search by title
@@ -56,7 +57,7 @@ class EventController extends Controller
             $query->where('title', 'like', '%' . $request->search . '%');
         }
 
-        $events = $query->orderBy('event_date', 'asc')
+        $events = $query->orderBy('start_date', 'asc')
             ->paginate($request->get('per_page', 12));
 
         return response()->json([
@@ -74,8 +75,17 @@ class EventController extends Controller
     /**
      * Display the specified event.
      */
-    public function show(Event $event): JsonResponse
+    public function show($identifier): JsonResponse
     {
+        $event = $this->findEventByIdentifier($identifier);
+
+        if (!$event) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Event not found'
+            ], 404);
+        }
+
         $event->load([
             'creator:id,name',
             'registrations.user:id,name,phone,gender',
@@ -90,6 +100,20 @@ class EventController extends Controller
     }
 
     /**
+     * Find event by ID or slug.
+     */
+    private function findEventByIdentifier($identifier): ?Event
+    {
+        // Try to find by ID first
+        if (is_numeric($identifier)) {
+            return Event::find($identifier);
+        }
+
+        // If not numeric, try to find by slug
+        return Event::where('slug', $identifier)->first();
+    }
+
+    /**
      * Get upcoming events (next 30 days).
      */
     public function upcoming(): JsonResponse
@@ -99,6 +123,7 @@ class EventController extends Controller
             ->where('start_date', '>', now())
             ->where('start_date', '<=', now()->addDays(30))
             ->where('status', '!=', 'event_closed')
+            ->where('status', '!=', 'draft') // Exclude draft events
             ->orderBy('start_date', 'asc')
             ->limit(5)
             ->get();
@@ -116,10 +141,30 @@ class EventController extends Controller
     {
         $events = Event::with(['creator:id,name'])
             ->withCount('registrations')
+            ->where('is_featured', true) // Use is_featured field
             ->where('start_date', '>=', now())
             ->where('status', '!=', 'event_closed')
-            ->orderBy('registrations_count', 'desc')
+            ->where('status', '!=', 'draft') // Exclude draft events
+            ->orderBy('start_date', 'asc')
             ->limit(3)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => EventResource::collection($events),
+        ]);
+    }
+
+    /**
+     * Get all featured events (for admin purposes).
+     */
+    public function allFeatured(): JsonResponse
+    {
+        $events = Event::with(['creator:id,name'])
+            ->withCount('registrations')
+            ->where('is_featured', true)
+            ->where('status', '!=', 'draft') // Exclude draft events
+            ->orderBy('start_date', 'asc')
             ->get();
 
         return response()->json([
@@ -133,8 +178,17 @@ class EventController extends Controller
     /**
      * Get event documentation by type.
      */
-    public function getDocumentation(Request $request, Event $event): JsonResponse
+    public function getDocumentation(Request $request, $identifier): JsonResponse
     {
+        $event = $this->findEventByIdentifier($identifier);
+
+        if (!$event) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Event not found'
+            ], 404);
+        }
+
         $type = $request->get('type', 'all');
         $query = $event->gallery();
 
@@ -150,8 +204,8 @@ class EventController extends Controller
                 'event' => [
                     'id' => $event->id,
                     'title' => $event->title,
-                    'start_date' => $event->start_date->format('Y-m-d H:i'),
-                    'end_date' => $event->end_date->format('Y-m-d H:i'),
+                    'start_date' => $event->start_date?->format('Y-m-d H:i'),
+                    'end_date' => $event->end_date?->format('Y-m-d H:i'),
                 ],
                 'documentation' => $documentation->map(function ($item) {
                     return [
@@ -185,7 +239,8 @@ class EventController extends Controller
     {
         $query = Event::with(['creator:id,name'])
             ->withCount(['registrations', 'gallery'])
-            ->whereHas('gallery');
+            ->whereHas('gallery')
+            ->where('status', '!=', 'draft'); // Exclude draft events
 
         // Filter by documentation type
         if ($request->has('doc_type')) {
@@ -194,7 +249,7 @@ class EventController extends Controller
             });
         }
 
-        $events = $query->orderBy('event_date', 'desc')
+        $events = $query->orderBy('start_date', 'desc')
             ->paginate($request->get('per_page', 12));
 
         $eventsData = $events->getCollection()->map(function ($event) {

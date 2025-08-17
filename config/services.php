@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'wa-masbro' => [
+        'url' => env('WA_MASBRO_URL'),
+        'key_id' => env('WA_MASBRO_KEY_ID'),
+    ],
+
 ];

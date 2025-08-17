@@ -19,24 +19,157 @@ Accept: application/json
 
 ## 1. Authentication Endpoints
 
-### 1.1 Send OTP
+### 1.1 User Registration
+**POST** `/auth/register`
+
+**Request Body:**
+```json
+{
+    "name": "John Doe",
+    "country_code": "+62",
+    "phone": "81234567890",
+    "email": "john@example.com",
+    "gender": "male"
+}
+```
+
+**Field Requirements:**
+- `name` (required): Nama lengkap user (min 2 karakter, hanya huruf, spasi, tanda hubung, apostrof, dan titik)
+- `country_code` (required): Kode negara (default: +62, support multiple countries)
+- `phone` (required): Nomor telepon (min 8 digit, max 15 digit, validasi menggunakan Laravel-Phone)
+- `email` (optional): Email user (harus valid dan unik)
+- `gender` (optional): Jenis kelamin (male/female)
+
+**Response Success (201):**
+```json
+{
+    "success": true,
+    "message": "Registration successful! OTP has been sent to your WhatsApp for verification.",
+    "data": {
+        "user": {
+            "id": 1,
+            "name": "John Doe",
+            "country_code": "+62",
+            "phone": "81234567890",
+            "full_phone": "+6281234567890",
+            "email": "john@example.com",
+            "gender": "male"
+        },
+        "otp_info": {
+            "phone": "+6281234567890",
+            "expires_in": 600,
+            "expires_at": "2025-01-20T10:30:00.000000Z",
+            "delivery_method": "whatsapp"
+        },
+        "next_step": "Verify OTP using /api/auth/verify-otp endpoint to complete authentication."
+    }
+}
+```
+
+**Response Error (409):**
+```json
+{
+    "success": false,
+    "message": "User with this phone number already exists."
+}
+```
+
+**Response Error (422):**
+```json
+{
+    "success": false,
+    "message": "Validation failed",
+    "errors": {
+        "name": ["Nama wajib diisi."],
+        "country_code": ["Kode negara wajib diisi."],
+        "phone": ["Format nomor telepon tidak valid untuk kode negara yang dipilih."],
+        "email": ["Format email tidak valid."],
+        "gender": ["Jenis kelamin harus male atau female."]
+    }
+}
+```
+
+### 1.2 Check User Status
+**POST** `/auth/check-user-status`
+
+**Request Body:**
+```json
+{
+    "phone": "81234567890"
+}
+```
+
+**Response Success (200) - Existing User:**
+```json
+{
+    "success": true,
+    "user_status": "existing",
+    "data": {
+        "user_id": 1,
+        "name": "John Doe",
+        "country_code": "+62",
+        "phone": "81234567890",
+        "full_phone": "+6281234567890",
+        "email": "john@example.com",
+        "gender": "male",
+        "registered_at": "2025-01-15T10:00:00.000000Z"
+    },
+    "message": "User already registered",
+    "next_step": "Request OTP for login using /api/auth/send-otp endpoint"
+}
+```
+
+**Response Success (200) - New User:**
+```json
+{
+    "success": true,
+    "user_status": "new",
+    "data": {
+        "phone": "81234567890",
+        "message": "Phone number not registered"
+    },
+    "message": "Phone number not registered",
+    "next_step": "Register new account using /api/auth/register endpoint"
+}
+```
+
+### 1.3 Send OTP
 **POST** `/auth/send-otp`
 
 **Request Body:**
 ```json
 {
-    "phone": "08123456789"
+    "phone": "81234567890"
 }
 ```
 
-**Response Success (200):**
+**Response Success (200) - For Existing User:**
 ```json
 {
     "success": true,
-    "message": "OTP sent successfully",
+    "message": "OTP sent successfully via WhatsApp for login",
     "data": {
-        "phone": "08123456789",
-        "expires_at": "2025-08-17T10:30:00Z"
+        "phone": "+6281234567890",
+        "expires_in": 600,
+        "expires_at": "2025-01-20T10:30:00.000000Z",
+        "delivery_method": "whatsapp"
+    },
+    "user_status": "existing",
+    "next_step": "Verify OTP using /api/auth/verify-otp endpoint"
+}
+```
+
+**Response Error (404) - For Unregistered User:**
+```json
+{
+    "success": false,
+    "message": "Phone number not registered. Please register first.",
+    "code": 404,
+    "user_status": "not_registered",
+    "action_required": "redirect_to_registration",
+    "data": {
+        "phone": "81234567890",
+        "message": "This phone number is not registered in our system"
     }
 }
 ```
@@ -52,27 +185,47 @@ Accept: application/json
 }
 ```
 
-### 1.2 Verify OTP
+**Response Error (429):**
+```json
+{
+    "success": false,
+    "message": "OTP already sent. Please wait before requesting another."
+}
+```
+
+### 1.3 Verify OTP
 **POST** `/auth/verify-otp`
 
 **Request Body:**
 ```json
 {
-    "phone": "08123456789",
-    "otp_code": "123456"
+    "phone": "81234567890",
+    "otp": "123456",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "gender": "male"
 }
 ```
+
+**Field Requirements:**
+- `phone` (required): Nomor telepon yang digunakan untuk registrasi
+- `otp` (required): Kode OTP 6 digit yang diterima via WhatsApp
+- `name` (optional): Nama lengkap (jika belum terdaftar)
+- `email` (optional): Email (jika belum terdaftar)
+- `gender` (optional): Jenis kelamin (jika belum terdaftar)
 
 **Response Success (200):**
 ```json
 {
     "success": true,
-    "message": "OTP verified successfully",
+    "message": "Authentication successful",
     "data": {
         "user": {
             "id": 1,
             "name": "John Doe",
-            "phone": "08123456789",
+            "country_code": "+62",
+            "phone": "81234567890",
+            "full_phone": "+6281234567890",
             "email": "john@example.com",
             "gender": "male"
         },
@@ -82,7 +235,58 @@ Accept: application/json
 }
 ```
 
-### 1.3 Get Profile (Protected)
+**Response Error (401):**
+```json
+{
+    "success": false,
+    "message": "Invalid or expired OTP code"
+}
+```
+
+**Response Error (422):**
+```json
+{
+    "success": false,
+    "message": "Validation failed",
+    "errors": {
+        "otp": ["The otp field is required."]
+    }
+}
+```
+
+### 1.4 Resend OTP
+**POST** `/auth/resend-otp`
+
+**Request Body:**
+```json
+{
+    "phone": "81234567890"
+}
+```
+
+**Response Success (200):**
+```json
+{
+    "success": true,
+    "message": "OTP sent successfully via WhatsApp",
+    "data": {
+        "phone": "+6281234567890",
+        "expires_in": 600,
+        "expires_at": "2025-01-20T10:30:00.000000Z",
+        "delivery_method": "whatsapp"
+    }
+}
+```
+
+**Response Error (429):**
+```json
+{
+    "success": false,
+    "message": "Please wait 2 minutes before requesting another OTP"
+}
+```
+
+### 1.5 Get Profile (Protected)
 **GET** `/auth/profile`
 
 **Headers:**
@@ -97,7 +301,9 @@ Authorization: Bearer {token}
     "data": {
         "id": 1,
         "name": "John Doe",
-        "phone": "08123456789",
+        "country_code": "+62",
+        "phone": "81234567890",
+        "full_phone": "+6281234567890",
         "email": "john@example.com",
         "gender": "male",
         "created_at": "2025-08-16T10:00:00Z"
@@ -105,7 +311,7 @@ Authorization: Bearer {token}
 }
 ```
 
-### 1.4 Update Profile (Protected)
+### 1.6 Update Profile (Protected)
 **PUT** `/auth/profile`
 
 **Headers:**
@@ -121,7 +327,7 @@ Authorization: Bearer {token}
 }
 ```
 
-### 1.5 Activity History (Protected)
+### 1.7 Activity History (Protected)
 **GET** `/auth/activity-history`
 
 **Headers:**
@@ -596,7 +802,7 @@ Authorization: Bearer {token}
             "bank_transfer_note": "Mohon cantumkan nama donatur...",
             "minimum_donation": "10000.00",
             "is_active": true,
-            "contact_person": "Ustadz Ahmad - 08123456789",
+            "contact_person": "Ustadz Ahmad - +628123456789",
             "contact_email": "donasi@sesuaisunnah.org",
             "created_at": "2025-08-16T10:00:00Z"
         }
@@ -622,7 +828,7 @@ Authorization: Bearer {token}
         "bank_transfer_note": "Mohon cantumkan nama donatur...",
         "minimum_donation": "10000.00",
         "is_active": true,
-        "contact_person": "Ustadz Ahmad - 08123456789",
+        "contact_person": "Ustadz Ahmad - +628123456789",
         "contact_email": "donasi@sesuaisunnah.org"
     }
 }
@@ -643,11 +849,33 @@ Authorization: Bearer {token}
 }
 ```
 
+**Common Validation Errors:**
+- `country_code`: ["Kode negara wajib diisi.", "Kode negara tidak valid."]
+- `phone`: ["Format nomor telepon tidak valid untuk kode negara yang dipilih."]
+- `name`: ["Nama wajib diisi.", "Nama minimal 2 karakter."]
+- `email`: ["Format email tidak valid."]
+- `gender`: ["Jenis kelamin harus male atau female."]
+
 ### 6.2 Not Found Error (404)
 ```json
 {
     "success": false,
     "message": "Resource not found"
+}
+```
+
+### 6.3 User Not Registered Error (404)
+```json
+{
+    "success": false,
+    "message": "Phone number not registered. Please register first.",
+    "code": 404,
+    "user_status": "not_registered",
+    "action_required": "redirect_to_registration",
+    "data": {
+        "phone": "81234567890",
+        "message": "This phone number is not registered in our system"
+    }
 }
 ```
 
@@ -712,38 +940,118 @@ https://your-domain.com/storage/{file_path}
 
 ---
 
-## 9. Implementation Notes
+## 9. Phone Number Formatting & Laravel-Phone Integration
 
-### 9.1 Authentication Flow
+### 9.1 Phone Number Format
+Sistem menggunakan package **Laravel-Phone** untuk validasi dan formatting nomor telepon internasional.
+
+**Format Input:**
+- **User Input**: `+62839999453` atau `0839999453`
+- **Stored in Database**: 
+  - `country_code`: `+62`
+  - `phone`: `8399999453`
+- **Display Format**: `+62839999453` (menggunakan `full_phone` attribute)
+- **WhatsApp Service Format**: `62839999453` (tanpa `+`, menggunakan `whatsapp_phone` attribute)
+
+### 9.2 Supported Country Codes
+Sistem mendukung multiple country codes dengan default `+62` (Indonesia):
+
+**Primary Countries:**
+- `+62` - Indonesia (default)
+- `+1` - United States/Canada
+- `+44` - United Kingdom
+- `+81` - Japan
+- `+86` - China
+- `+91` - India
+
+**Additional Countries:**
+- `+33` - France, `+49` - Germany, `+39` - Italy, `+34` - Spain
+- `+61` - Australia, `+7` - Russia, `+55` - Brazil
+- `+31` - Netherlands, `+32` - Belgium, `+46` - Sweden
+- `+47` - Norway, `+48` - Poland, `+52` - Mexico
+- Dan 50+ negara lainnya
+
+### 9.3 Phone Validation Rules
+**Validation menggunakan Laravel-Phone:**
+- `phone:country_code` - Validasi format nomor sesuai kode negara
+- `min:8` - Minimal 8 digit
+- `max:15` - Maksimal 15 digit
+- Auto-formatting dan cleaning input
+
+**Contoh Validasi:**
+```php
+'phone' => [
+    'required',
+    'string',
+    'phone:country_code', // Laravel-Phone validation
+    'min:8',
+    'max:15',
+]
+```
+
+### 9.4 User Model Attributes
+**Accessor Methods:**
+- `$user->full_phone` → `+62839999453`
+- `$user->whatsapp_phone` → `62839999453`
+
+**Mutator Methods:**
+- `setPhoneAttribute()` - Auto-clean phone number (remove non-digits)
+
+### 9.5 WhatsApp Integration
+**Format untuk Service WA:**
+- **Input**: `+62839999453`
+- **Process**: Remove `+` dari country_code + phone
+- **Output**: `62839999453`
+
+**Contoh Penggunaan:**
+```php
+$formattedPhone = $user->whatsapp_phone; // 62839999453
+$sent = $this->waMasbro->sendTextMessage($formattedPhone, $message);
+```
+
+---
+
+## 10. Implementation Notes
+
+### 10.1 Authentication Flow
 1. User input phone number → Call `/auth/send-otp`
-2. User input OTP → Call `/auth/verify-otp`
-3. Save token from response
-4. Use token in Authorization header for protected endpoints
+2. **If user not registered**: Frontend receives 404 response with `action_required: "redirect_to_registration"` → Redirect user to registration page
+3. **If user registered**: OTP sent via WhatsApp → User input OTP → Call `/auth/verify-otp`
+4. Save token from response
+5. Use token in Authorization header for protected endpoints
 
-### 9.2 Event Registration Flow
+### 10.2 User Registration Flow
+1. User input phone number → Call `/auth/check-user-status` (optional, for checking existing user)
+2. User fills registration form → Call `/auth/register`
+3. OTP automatically sent via WhatsApp after successful registration
+4. User verifies OTP → Call `/auth/verify-otp`
+5. User authenticated and redirected to main application
+
+### 10.3 Event Registration Flow
 1. User browse events → Call `/events`
 2. User select event → Call `/events/{id}`
 3. User register → Call `/event-registrations` (POST)
 4. User check registration → Call `/event-registrations/user/{phone}`
 
-### 9.3 E-book Reading Flow
+### 10.4 E-book Reading Flow
 1. User browse e-books → Call `/ebooks`
 2. User select e-book → Call `/ebooks/{id}`
 3. User read/download → Call `/ebooks/{id}/interact`
 
-### 9.4 Donation Information
+### 10.5 Donation Information
 1. Get donation settings → Call `/donation-settings/active`
 2. Display bank information and notes to user
 
-### 9.5 Error Handling
+### 10.6 Error Handling
 - Always check `success` field in response
 - Handle validation errors (422) by displaying field-specific messages
+- Handle user not registered errors (404) by redirecting to registration page
 - Handle authentication errors (401) by redirecting to login
 - Handle server errors (500) with user-friendly messages
 
 ---
 
-## 10. Rate Limiting
+## 11. Rate Limiting
 
 API memiliki rate limiting untuk mencegah abuse:
 - **Public endpoints**: 60 requests per minute per IP
@@ -752,24 +1060,24 @@ API memiliki rate limiting untuk mencegah abuse:
 
 ---
 
-## 11. Testing
+## 12. Testing
 
-### 11.1 Postman Collection
+### 12.1 Postman Collection
 Import file `Sesuai_Sunnah_API.postman_collection.json` ke Postman untuk testing.
 
-### 11.2 Environment Variables
+### 12.2 Environment Variables
 Set environment variables:
 - `base_url`: Base URL API
 - `auth_token`: Token setelah login berhasil
 
-### 11.3 Test Data
+### 12.3 Test Data
 Gunakan data dari seeder yang sudah dibuat:
-- Phone: `08123456789`
+- Phone: `81234567890` (tanpa country code, default +62)
 - OTP: `123456` (untuk development)
 
 ---
 
-## 12. Support
+## 13. Support
 
 Untuk pertanyaan atau bantuan implementasi:
 - Email: support@sesuaisunnah.org

@@ -33,11 +33,13 @@ class OtpCode extends Model
             ->where('expires_at', '>', now())
             ->update(['is_used' => true]);
 
-        // Generate new 6-digit OTP code
-        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        
-        // Set expiration to 10 minutes from now
-        $expiresAt = Carbon::now()->addMinutes(10);
+        // Generate new OTP code with configurable length
+        $codeLength = config('otp.code_length', 6);
+        $code = str_pad(random_int(0, pow(10, $codeLength) - 1), $codeLength, '0', STR_PAD_LEFT);
+
+        // Set expiration to configurable minutes from now
+        $expirationMinutes = config('otp.expiration_minutes', 10);
+        $expiresAt = Carbon::now()->addMinutes($expirationMinutes);
 
         return self::create([
             'phone' => $phone,

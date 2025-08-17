@@ -21,8 +21,11 @@ use App\Http\Controllers\Api\DonationSettingsController;
 
 // Authentication Routes
 Route::prefix('auth')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
     Route::post('/send-otp', [AuthController::class, 'sendOtp']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
+    Route::post('/check-user-status', [AuthController::class, 'checkUserStatus']);
 
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
@@ -44,6 +47,7 @@ Route::prefix('events')->group(function () {
     Route::get('/', [EventController::class, 'index']);
     Route::get('/upcoming', [EventController::class, 'upcoming']);
     Route::get('/featured', [EventController::class, 'featured']);
+    Route::get('/all-featured', [EventController::class, 'allFeatured']);
     Route::get('/with-documentation', [EventController::class, 'eventsWithDocumentation']);
     Route::get('/{event}', [EventController::class, 'show']);
 
