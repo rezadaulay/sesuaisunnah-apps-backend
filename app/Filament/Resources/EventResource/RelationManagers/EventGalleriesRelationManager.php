@@ -36,41 +36,37 @@ class EventGalleriesRelationManager extends RelationManager
     {
         return $form
             ->schema([
-                Section::make('Gallery Information')
+                Section::make('Informasi Gallery')
                     ->schema([
                         Grid::make(2)
                             ->schema([
                                 Select::make('type')
                                     ->options([
-                                        'photo' => 'Photo',
-                                        'video' => 'Video',
-                                        'document' => 'Document',
+                                        'photo' => 'Foto',
                                     ])
                                     ->required()
-                                    ->default('photo'),
- 
+                                    ->default('photo')
+                                    ->disabled(),
+
                                 FileUpload::make('photo_url')
-                                    ->label('File')
+                                    ->label('Foto')
                                     ->acceptedFileTypes([
                                         'image/jpeg',
                                         'image/png',
                                         'image/gif',
-                                        'video/mp4',
-                                        'video/mov',
-                                        'video/avi',
-                                        'application/pdf',
-                                        'application/msword',
-                                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                        'image/webp',
                                     ])
-                                    ->maxSize(10240) // 10MB
-                                    ->directory('event-gallery')
+                                    ->maxSize(5120) // 5MB
+                                    ->directory('event-gallery/photos')
+                                    ->imageEditor()
                                     ->required(),
                             ]),
- 
+
                         Textarea::make('description')
+                            ->label('Deskripsi Foto')
                             ->rows(3)
                             ->maxLength(500)
-                            ->placeholder('Enter description for this gallery item'),
+                            ->placeholder('Masukkan deskripsi untuk foto ini'),
                     ])->columns(1),
             ]);
     }
@@ -78,56 +74,29 @@ class EventGalleriesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->recordTitleAttribute('type')
+            ->recordTitleAttribute('description')
             ->columns([
                 ImageColumn::make('photo_url')
-                    ->label('Preview')
+                    ->label('Preview Foto')
                     ->circular()
-                    ->size(60)
-                    ->visibility(fn ($record) => $record->type === 'photo'),
- 
-                IconColumn::make('type')
-                    ->label('Type')
-                    ->icon(fn (string $state): string => match ($state) {
-                        'photo' => 'heroicon-o-photo',
-                        'video' => 'heroicon-o-video-camera',
-                        'document' => 'heroicon-o-document',
-                        default => 'heroicon-o-question-mark-circle',
-                    })
-                    ->color(fn (string $state): string => match ($state) {
-                        'photo' => 'success',
-                        'video' => 'warning',
-                        'document' => 'info',
-                        default => 'gray',
-                    }),
+                    ->size(60),
  
                 TextColumn::make('description')
+                    ->label('Deskripsi')
                     ->limit(50)
                     ->searchable(),
- 
-                BadgeColumn::make('type')
-                    ->colors([
-                        'success' => 'photo',
-                        'warning' => 'video',
-                        'info' => 'document',
-                    ]),
- 
+
                 TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->label('Dibuat Pada')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable(),
             ])
             ->filters([
-                SelectFilter::make('type')
-                    ->options([
-                        'photo' => 'Photo',
-                        'video' => 'Video',
-                        'document' => 'Document',
-                    ]),
+                //
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
-                    ->label('Add Gallery Item'),
+                    ->label('Tambah Foto'),
             ])
             ->actions([
                 ActionGroup::make([

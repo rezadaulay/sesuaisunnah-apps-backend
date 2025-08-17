@@ -9,6 +9,11 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\BadgeEntry;
+use Filament\Infolists\Components\Grid as InfolistGrid;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\Section;
@@ -34,11 +39,17 @@ class DonationResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-heart';
 
-    protected static ?string $navigationGroup = 'Financial Management';
+    protected static ?string $navigationGroup = 'Manajemen Konten';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
-    protected static ?string $navigationLabel = 'Donations';
+    protected static ?string $navigationLabel = 'Donasi';
+
+    protected static ?string $modelLabel = 'Donasi';
+
+    protected static ?string $pluralModelLabel = 'Donasi';
+
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function form(Form $form): Form
     {
@@ -222,6 +233,67 @@ class DonationResource extends Resource
                 ]),
             ])
             ->defaultSort('donation_date', 'desc');
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('Donation Details')
+                    ->schema([
+                        TextEntry::make('donor_name')
+                            ->label('Donor Name'),
+                        TextEntry::make('donor_phone')
+                            ->label('Donor Phone'),
+                        TextEntry::make('donor_email')
+                            ->label('Donor Email'),
+                        TextEntry::make('message')
+                            ->label('Message'),
+                    ]),
+                InfolistSection::make('Donation Information')
+                    ->schema([
+                        TextEntry::make('amount')
+                            ->label('Amount'),
+                        TextEntry::make('status')
+                            ->label('Status')
+                            ->badge()
+                            ->color(fn (string $state): string => match ($state) {
+                                'pending' => 'warning',
+                                'confirmed' => 'info',
+                                'completed' => 'success',
+                                'cancelled' => 'danger',
+                                default => 'gray',
+                            }),
+                        TextEntry::make('payment_method')
+                            ->label('Payment Method'),
+                        TextEntry::make('donation_date')
+                            ->label('Donation Date'),
+                    ]),
+                InfolistSection::make('Bank Information')
+                    ->schema([
+                        TextEntry::make('bank_name')
+                            ->label('Bank Name'),
+                        TextEntry::make('account_number')
+                            ->label('Account Number'),
+                        TextEntry::make('account_name')
+                            ->label('Account Holder Name'),
+                    ]),
+                InfolistSection::make('Additional Settings')
+                    ->schema([
+                        TextEntry::make('is_anonymous')
+                            ->label('Anonymous Donation')
+                            ->badge()
+                            ->color(fn (bool $state): string => $state ? 'warning' : 'success'),
+                        TextEntry::make('is_verified')
+                            ->label('Payment Verified')
+                            ->badge()
+                            ->color(fn (bool $state): string => $state ? 'success' : 'warning'),
+                        TextEntry::make('verified_by')
+                            ->label('Verified By'),
+                        TextEntry::make('verified_at')
+                            ->label('Verified At'),
+                    ]),
+            ]);
     }
 
     public static function getRelations(): array

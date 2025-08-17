@@ -30,7 +30,7 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::hex('#005555'),
                 'secondary' => Color::hex('#069A8E'),
-                'success' => Color::hex('#069A8E'),
+                // 'success' => Color::hex('#069A8E'),
                 'warning' => Color::hex('#FFC700'),
                 'danger' => Color::hex('#dc2626'),
                 'info' => Color::hex('#0284c7'),

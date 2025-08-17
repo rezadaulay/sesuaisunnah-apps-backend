@@ -20,6 +20,7 @@ class EventRegistration extends Model
         'referral_source',
         'registered_at',
         'status',
+        'occupation',
     ];
 
     protected $casts = [

@@ -9,6 +9,11 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\Grid as InfolistGrid;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\Section;
@@ -20,8 +25,8 @@ use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ImageColumn;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Actions\ActionGroup;
@@ -212,6 +217,66 @@ class EbookResource extends Resource
                 ]),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('Informasi E-book')
+                    ->schema([
+                        InfolistGrid::make(2)
+                            ->schema([
+                                TextEntry::make('title')
+                                    ->label('Judul')
+                                    ->size(TextEntry\TextEntrySize::Large)
+                                    ->weight('bold'),
+
+                                TextEntry::make('price')
+                                    ->label('Harga')
+                                    ->money('IDR')
+                                    ->formatStateUsing(fn ($state) => $state == 0 ? 'Gratis' : 'Rp ' . number_format($state, 0, ',', '.')),
+                            ]),
+
+                        TextEntry::make('description')
+                            ->label('Deskripsi')
+                            ->markdown()
+                            ->columnSpan(2),
+
+                        InfolistGrid::make(2)
+                            ->schema([
+                                ImageEntry::make('cover_image')
+                                    ->label('Cover Image')
+                                    ->circular()
+                                    ->size(100),
+
+                                TextEntry::make('file_url')
+                                    ->label('File E-book')
+                                    ->url(fn ($record) => $record->full_file_url)
+                                    ->openUrlInNewTab(),
+                            ]),
+                    ])->columns(2),
+
+                InfolistSection::make('Informasi Sistem')
+                    ->schema([
+                        InfolistGrid::make(3)
+                            ->schema([
+                                TextEntry::make('creator.name')
+                                    ->label('Dibuat Oleh')
+                                    ->icon('heroicon-m-user'),
+
+                                TextEntry::make('created_at')
+                                    ->label('Dibuat Pada')
+                                    ->dateTime()
+                                    ->icon('heroicon-m-calendar'),
+
+                                TextEntry::make('updated_at')
+                                    ->label('Diperbarui Pada')
+                                    ->dateTime()
+                                    ->icon('heroicon-m-clock'),
+                            ]),
+                    ])->columns(3)->collapsible(),
+            ]);
     }
 
     public static function getRelations(): array

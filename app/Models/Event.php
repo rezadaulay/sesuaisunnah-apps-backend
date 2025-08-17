@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class Event extends Model
 {
@@ -27,7 +28,7 @@ class Event extends Model
         'current_participants',
         'status',
         'event_closed_at',
-        'allow_gallery_after_close',
+        'requires_registration',
     ];
 
     protected $casts = [
@@ -37,8 +38,31 @@ class Event extends Model
         'registration_opens_at' => 'datetime',
         'registration_closes_at' => 'datetime',
         'event_closed_at' => 'datetime',
-        'allow_gallery_after_close' => 'boolean',
+        'requires_registration' => 'boolean',
     ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Auto-sync status with registration dates
+        static::saving(function ($event) {
+            if ($event->requires_registration) {
+                $now = now();
+
+                // Auto-update status based on registration dates
+                if ($event->registration_opens_at && $event->registration_closes_at) {
+                    if ($now < $event->registration_opens_at) {
+                        $event->status = 'published';
+                    } elseif ($now >= $event->registration_opens_at && $now <= $event->registration_closes_at) {
+                        $event->status = 'registration_open';
+                    } elseif ($now > $event->registration_closes_at) {
+                        $event->status = 'registration_closed';
+                    }
+                }
+            }
+        });
+    }
 
     /**
      * Get the user that created the event.
@@ -105,8 +129,13 @@ class Event extends Model
             return false;
         }
 
+        // If event doesn't require registration, always return false
+        if (!$this->requires_registration) {
+            return false;
+        }
+
         $now = now();
-        
+
         // Check if registration period is set
         if ($this->registration_opens_at && $this->registration_closes_at) {
             return $now->between($this->registration_opens_at, $this->registration_closes_at);
@@ -121,6 +150,10 @@ class Event extends Model
      */
     public function getCanAcceptRegistrationsAttribute(): bool
     {
+        if (!$this->requires_registration) {
+            return false;
+        }
+
         if (!$this->is_registration_open) {
             return false;
         }
@@ -131,6 +164,14 @@ class Event extends Model
         }
 
         return true;
+    }
+
+    /**
+     * Check if event requires registration.
+     */
+    public function getRequiresRegistrationAttribute(): bool
+    {
+        return $this->attributes['requires_registration'] ?? true;
     }
 
     /**
@@ -146,7 +187,7 @@ class Event extends Model
      */
     public function getCanUpdateGalleryAttribute(): bool
     {
-        return $this->is_event_closed && $this->allow_gallery_after_close;
+        return $this->is_event_closed;
     }
 
     /**
@@ -261,16 +302,6 @@ class Event extends Model
         $this->update([
             'status' => 'event_closed',
             'event_closed_at' => now(),
-        ]);
-    }
-
-    /**
-     * Open event for gallery updates.
-     */
-    public function openForGallery(): void
-    {
-        $this->update([
-            'allow_gallery_after_close' => true,
         ]);
     }
 }

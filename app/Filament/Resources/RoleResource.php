@@ -9,16 +9,20 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\Grid as InfolistGrid;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Actions\ActionGroup;
 use Filament\Tables\Actions\EditAction;
@@ -154,6 +158,39 @@ class RoleResource extends Resource
                 ]),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('Role Information')
+                    ->schema([
+                        TextEntry::make('name')
+                            ->label('Role Name'),
+                        TextEntry::make('display_name')
+                            ->label('Display Name'),
+                        TextEntry::make('description')
+                            ->label('Description'),
+                    ]),
+                InfolistSection::make('Permissions')
+                    ->schema([
+                        InfolistGrid::make('permissions')
+                            ->schema([
+                                TextEntry::make('name')
+                                    ->label('Permission Name'),
+                            ]),
+                    ]),
+                InfolistSection::make('Settings')
+                    ->schema([
+                        TextEntry::make('is_system_role')
+                            ->label('System Role'),
+                        TextEntry::make('created_at')
+                            ->label('Created At'),
+                        TextEntry::make('updated_at')
+                            ->label('Updated At'),
+                    ]),
+            ]);
     }
 
     public static function getRelations(): array

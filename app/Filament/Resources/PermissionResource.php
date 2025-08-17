@@ -9,6 +9,10 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\Grid as InfolistGrid;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\Section;
@@ -137,6 +141,25 @@ class PermissionResource extends Resource
                 ]),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('Permission Information')
+                    ->schema([
+                        TextEntry::make('name'),
+                        TextEntry::make('display_name'),
+                        TextEntry::make('description'),
+                        TextEntry::make('guard_name'),
+                    ]),
+                InfolistSection::make('Additional Information')
+                    ->schema([
+                        TextEntry::make('created_at'),
+                        TextEntry::make('updated_at'),
+                    ]),
+            ]);
     }
 
     public static function getRelations(): array

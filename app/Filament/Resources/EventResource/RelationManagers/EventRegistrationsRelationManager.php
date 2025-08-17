@@ -37,43 +37,79 @@ class EventRegistrationsRelationManager extends RelationManager
     {
         return $form
             ->schema([
-                Section::make('Registration Information')
+                Section::make('Informasi Registrasi')
                     ->schema([
                         Grid::make(2)
                             ->schema([
-                                Select::make('user_id')
-                                    ->relationship('user', 'name')
-                                    ->searchable()
-                                    ->preload()
+                                TextInput::make('name')
+                                    ->label('Nama Lengkap')
                                     ->required()
-                                    ->label('Participant'),
- 
-                                Select::make('status')
-                                    ->options([
-                                        'pending' => 'Pending',
-                                        'confirmed' => 'Confirmed',
-                                        'attended' => 'Attended',
-                                        'cancelled' => 'Cancelled',
-                                    ])
-                                    ->default('pending')
-                                    ->required(),
+                                    ->maxLength(255),
+
+                                TextInput::make('phone')
+                                    ->label('Nomor Telepon')
+                                    ->tel()
+                                    ->required()
+                                    ->maxLength(20),
                             ]),
- 
+
                         Grid::make(2)
                             ->schema([
-                                DatePicker::make('registration_date')
+                                Select::make('gender')
+                                    ->label('Gender')
+                                    ->options([
+                                        'male' => 'Laki-laki',
+                                        'female' => 'Perempuan',
+                                    ])
+                                    ->required(),
+
+                                TextInput::make('email')
+                                    ->label('Email')
+                                    ->email()
+                                    ->maxLength(255),
+                            ]),
+
+                        Grid::make(2)
+                            ->schema([
+                                TextInput::make('occupation')
+                                    ->label('Pekerjaan/Kegiatan')
+                                    ->maxLength(255)
+                                    ->placeholder('Contoh: Mahasiswa, Karyawan, Wiraswasta, dll')
+                                    ->helperText('Opsional'),
+
+                                Select::make('referral_source')
+                                    ->label('Sumber Referral')
+                                    ->options([
+                                        'website' => 'Website',
+                                        'instagram' => 'Instagram',
+                                        'facebook' => 'Facebook',
+                                        'whatsapp' => 'WhatsApp',
+                                        'friend' => 'Teman/Keluarga',
+                                        'email' => 'Email',
+                                        'other' => 'Lainnya',
+                                    ])
+                                    ->required(),
+                            ]),
+
+                        Grid::make(2)
+                            ->schema([
+                                Select::make('status')
+                                    ->label('Status')
+                                    ->options([
+                                        'registered' => 'Terdaftar',
+                                        'confirmed' => 'Dikonfirmasi',
+                                        'cancelled' => 'Dibatalkan',
+                                        'attended' => 'Hadir',
+                                        'no_show' => 'Tidak Hadir',
+                                    ])
+                                    ->default('registered')
+                                    ->required(),
+
+                                DatePicker::make('registered_at')
+                                    ->label('Tanggal Registrasi')
                                     ->default(now())
                                     ->required(),
- 
-                                TextInput::make('referral_source')
-                                    ->maxLength(100)
-                                    ->placeholder('How did you hear about this event?'),
                             ]),
- 
-                        Textarea::make('notes')
-                            ->rows(3)
-                            ->maxLength(500)
-                            ->placeholder('Additional notes about this registration'),
                     ])->columns(1),
             ]);
     }
@@ -81,71 +117,107 @@ class EventRegistrationsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->recordTitleAttribute('user.name')
+            ->recordTitleAttribute('name')
             ->columns([
-                TextColumn::make('user.name')
-                    ->label('Participant Name')
+                TextColumn::make('name')
+                    ->label('Nama Peserta')
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
- 
-                TextColumn::make('user.phone')
-                    ->label('Phone')
+
+                TextColumn::make('phone')
+                    ->label('Telepon')
                     ->searchable()
                     ->copyable(),
- 
-                BadgeColumn::make('user.gender')
+
+                TextColumn::make('occupation')
+                    ->label('Pekerjaan/Kegiatan')
+                    ->searchable()
+                    ->sortable()
+                    ->limit(30)
+                    ->toggleable(),
+
+                BadgeColumn::make('gender')
+                    ->label('Gender')
                     ->colors([
                         'primary' => 'male',
                         'secondary' => 'female',
-                    ]),
- 
+                    ])
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'male' => 'Laki-laki',
+                        'female' => 'Perempuan',
+                    }),
+
                 BadgeColumn::make('status')
+                    ->label('Status')
                     ->colors([
-                        'warning' => 'pending',
+                        'success' => 'registered',
                         'info' => 'confirmed',
-                        'success' => 'attended',
                         'danger' => 'cancelled',
-                    ]),
- 
-                TextColumn::make('registration_date')
-                    ->date()
+                        'success' => 'attended',
+                        'warning' => 'no_show',
+                    ])
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'registered' => 'Terdaftar',
+                        'confirmed' => 'Dikonfirmasi',
+                        'cancelled' => 'Dibatalkan',
+                        'attended' => 'Hadir',
+                        'no_show' => 'Tidak Hadir',
+                    }),
+
+                TextColumn::make('registered_at')
+                    ->label('Tanggal Registrasi')
+                    ->dateTime('d/m/Y H:i')
                     ->sortable(),
- 
-                TextColumn::make('referral_source')
-                    ->limit(30)
-                    ->toggleable(),
- 
-                IconColumn::make('is_attended')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-x-circle')
-                    ->trueColor('success')
-                    ->falseColor('gray'),
- 
+
+                BadgeColumn::make('referral_source')
+                    ->label('Referral')
+                    ->colors([
+                        'info' => 'website',
+                        'warning' => 'instagram',
+                        'primary' => 'facebook',
+                        'success' => 'whatsapp',
+                        'secondary' => 'friend',
+                        'danger' => 'email',
+                        'gray' => 'other',
+                    ])
+                    ->formatStateUsing(fn ($record) => $record->referral_source_label),
+
                 TextColumn::make('created_at')
+                    ->label('Dibuat Pada')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')
+                    ->label('Status')
                     ->options([
-                        'pending' => 'Pending',
-                        'confirmed' => 'Confirmed',
-                        'attended' => 'Attended',
-                        'cancelled' => 'Cancelled',
+                        'registered' => 'Terdaftar',
+                        'confirmed' => 'Dikonfirmasi',
+                        'cancelled' => 'Dibatalkan',
+                        'attended' => 'Hadir',
+                        'no_show' => 'Tidak Hadir',
                     ]),
- 
-                SelectFilter::make('user.gender')
+
+                SelectFilter::make('gender')
+                    ->label('Gender')
                     ->options([
-                        'male' => 'Male',
-                        'female' => 'Female',
-                    ])
-                    ->label('Gender'),
- 
-                TernaryFilter::make('is_attended')
-                    ->label('Attendance'),
+                        'male' => 'Laki-laki',
+                        'female' => 'Perempuan',
+                    ]),
+
+                SelectFilter::make('referral_source')
+                    ->label('Sumber Referral')
+                    ->options([
+                        'website' => 'Website',
+                        'instagram' => 'Instagram',
+                        'facebook' => 'Facebook',
+                        'whatsapp' => 'WhatsApp',
+                        'friend' => 'Teman/Keluarga',
+                        'email' => 'Email',
+                        'other' => 'Lainnya',
+                    ]),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()

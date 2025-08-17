@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventRegistrationController;
 use App\Http\Controllers\Api\EbookController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DonationSettingsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,7 +23,7 @@ use App\Http\Controllers\Api\AuthController;
 Route::prefix('auth')->group(function () {
     Route::post('/send-otp', [AuthController::class, 'sendOtp']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
-    
+
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/profile', [AuthController::class, 'profile']);
@@ -68,4 +69,10 @@ Route::prefix('ebooks')->group(function () {
 
     // User Interaction Routes (for tracking user engagement)
     Route::post('/{ebook}/interact', [EbookController::class, 'recordInteraction']);
+});
+
+// Public Donation Settings Routes (Read-only for frontend)
+Route::prefix('donation-settings')->group(function () {
+    Route::get('/', [DonationSettingsController::class, 'index']);
+    Route::get('/active', [DonationSettingsController::class, 'getActive']);
 });

@@ -9,6 +9,11 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\BadgeEntry;
+use Filament\Infolists\Components\Grid;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Actions\ActionGroup;
@@ -76,6 +81,12 @@ class EventRegistrationResource extends Resource
                             ->email()
                             ->maxLength(255),
 
+                        Forms\Components\TextInput::make('occupation')
+                            ->label('Pekerjaan/Kegiatan')
+                            ->maxLength(255)
+                            ->placeholder('Contoh: Mahasiswa, Karyawan, Wiraswasta, dll')
+                            ->helperText('Opsional'),
+
                         Forms\Components\Select::make('referral_source')
                             ->label('Sumber Referral')
                             ->options([
@@ -139,6 +150,19 @@ class EventRegistrationResource extends Resource
                         'male' => 'Laki-laki',
                         'female' => 'Perempuan',
                     }),
+
+                Tables\Columns\TextColumn::make('email')
+                    ->label('Email')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('occupation')
+                    ->label('Pekerjaan/Kegiatan')
+                    ->searchable()
+                    ->sortable()
+                    ->limit(30)
+                    ->toggleable(),
 
                 Tables\Columns\BadgeColumn::make('referral_source')
                     ->label('Referral')
@@ -230,6 +254,32 @@ class EventRegistrationResource extends Resource
                 ]),
             ])
             ->defaultSort('registered_at', 'desc');
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                Section::make('Informasi Umum')
+                    ->schema([
+                        TextEntry::make('event.title')
+                            ->label('Event'),
+                        TextEntry::make('user.name')
+                            ->label('User'),
+                        TextEntry::make('phone')
+                            ->label('Telepon'),
+                        TextEntry::make('email')
+                            ->label('Email'),
+                        TextEntry::make('occupation')
+                            ->label('Pekerjaan/Kegiatan'),
+                        TextEntry::make('referral_source_label')
+                            ->label('Sumber Referral'),
+                        TextEntry::make('status_label')
+                            ->label('Status'),
+                        TextEntry::make('registered_at')
+                            ->label('Tanggal Registrasi'),
+                    ]),
+            ]);
     }
 
     public static function getRelations(): array
