@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\EventResource;
+use App\Http\Resources\EventApiResource;
 use App\Models\Event;
 use App\Models\EventGallery;
 use Illuminate\Http\Request;
@@ -95,7 +95,7 @@ class EventController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new EventResource($event),
+            'data' => new EventApiResource($event),
         ]);
     }
 
@@ -130,7 +130,7 @@ class EventController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => EventResource::collection($events),
+            'data' => EventApiResource::collection($events),
         ]);
     }
 
@@ -151,7 +151,7 @@ class EventController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => EventResource::collection($events),
+            'data' => EventApiResource::collection($events),
         ]);
     }
 
@@ -169,7 +169,7 @@ class EventController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => EventResource::collection($events),
+            'data' => EventApiResource::collection($events),
         ]);
     }
 
